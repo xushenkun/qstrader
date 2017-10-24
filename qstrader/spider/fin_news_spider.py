@@ -23,7 +23,7 @@ DB_FILE = 'finnews.db'
 
 class FinNewsSpider(AbstractSpider):
     name = 'Finance News Spider'
-    custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100},}
+    custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG'}
 
     def __init__(self, data_path, full, *args, **kwargs): 
         super(FinNewsSpider, self).__init__(*args, **kwargs)
@@ -52,7 +52,7 @@ class FinNewsSpider(AbstractSpider):
         rsp = demjson.decode(response.body_as_unicode())
         items = rsp.get('list', None)
         if items is not None:
-            for it in items:
+            for it in reversed(items):
                 item = FinNewsItem()
                 item['id'] = it.get('id')
                 item['title'] = it.get('title')
@@ -68,6 +68,8 @@ class FinNewsItem(Item):
     url = Field()
     time = Field()
     content = Field()
+    def __str__(self):
+        return '%s %s' % (self['id'], self['title'])
 
 class FinNewsPipeline(object):
     def open_spider(self, spider):
@@ -100,6 +102,6 @@ if __name__ == '__main__':
     data_path = sys.argv[1]
     full = False
     if len(sys.argv) >= 3:
-        full = True if sys.argv[2] == 'full' else False
+        full = True if sys.argv[2].lower() == 'full' else False
     spiders = Spiders([FinNewsSpider], data_path=data_path, full=full)
     spiders.start()
