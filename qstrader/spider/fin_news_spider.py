@@ -16,14 +16,14 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
 from base import AbstractSpider, Spiders
 
 NEWS_SEEDS = ["http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106", ]
-FULL_MAX_PAGE = 1#00
-INCR_MAX_PAGE = 1#0
+FULL_MAX_PAGE = 100
+INCR_MAX_PAGE = 10
 NEWS_FILE = 'finnews.txt'
 DB_FILE = 'finnews.db'
 
 class FinNewsSpider(AbstractSpider):
     name = 'Finance News Spider'
-    custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG'}
+    custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG', 'DOWNLOAD_DELAY': 0.25}
 
     def __init__(self, data_path, full, *args, **kwargs): 
         super(FinNewsSpider, self).__init__(*args, **kwargs)
