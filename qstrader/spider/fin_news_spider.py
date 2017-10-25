@@ -15,26 +15,26 @@ import demjson
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
 from base import AbstractSpider, Spiders
 
-NEWS_SEEDS = ["http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106", ]
-FULL_MAX_PAGE = 100
-INCR_MAX_PAGE = 10
-NEWS_FILE = 'finnews.txt'
-DB_FILE = 'finnews.db'
-
 class FinNewsSpider(AbstractSpider):
-    name = 'Finance News Spider'
+
+    name = "Finance News Spider"
     custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG', 'DOWNLOAD_DELAY': 0.25}
 
-    def __init__(self, data_path, full, *args, **kwargs): 
-        super(FinNewsSpider, self).__init__(*args, **kwargs)
-        self.data_path = data_path
+    def __init__(self, out_root_path, full, conf, *args, **kwargs):    
+        self.out_root_path = out_root_path
         self.full = full
-        self.seeds = NEWS_SEEDS
-        self.max_page = FULL_MAX_PAGE if full else INCR_MAX_PAGE
         self.ids_seen = set()
-        db_file_path = os.path.join(self.data_path, DB_FILE)
-        if not self.full and os.path.exists(db_file_path):
-            conn = sqlite3.connect(db_file_path)
+        self.config(conf)
+        super(FinNewsSpider, self).__init__(*args, **kwargs)
+
+    def config(self, conf):
+        self.seeds = conf['seeds']
+        self.out_path = os.path.join(self.out_root_path, conf.get('out_folder'))
+        self.out_db_file = os.path.join(self.out_path, conf['out_db_file'])
+        self.out_news_file = os.path.join(self.out_path, conf['out_news_file'])
+        self.max_page = conf['full_max_page'] if self.full else conf['incr_max_page']
+        if not self.full and os.path.exists(self.out_db_file):
+            conn = sqlite3.connect(self.out_db_file)
             cursor = conn.cursor()
             cursor.execute("select nid from finnews")
             nids = cursor.fetchall()
@@ -52,7 +52,7 @@ class FinNewsSpider(AbstractSpider):
         rsp = demjson.decode(response.body_as_unicode())
         items = rsp.get('list', None)
         if items is not None:
-            for it in reversed(items):
+            for it in sorted(items, key=lambda x: x['time']):
                 item = FinNewsItem()
                 item['id'] = it.get('id')
                 item['title'] = it.get('title')
@@ -74,15 +74,14 @@ class FinNewsItem(Item):
 class FinNewsPipeline(object):
     def open_spider(self, spider):
         mode = 'w+' if spider.full else 'a+'
-        self.file = open(os.path.join(spider.data_path, NEWS_FILE), mode=mode, encoding='utf-8')
-        db_file_path = os.path.join(spider.data_path, DB_FILE)
+        self.file = open(spider.out_news_file, mode=mode, encoding='utf-8')
         if spider.full:
-            if os.path.exists(db_file_path): os.remove(db_file_path)
-            self.conn = sqlite3.connect(db_file_path)
+            if os.path.exists(spider.out_db_file): os.remove(spider.out_db_file)
+            self.conn = sqlite3.connect(spider.out_db_file)
             self.conn.execute("""create table finnews (nid varchar(16), title varchar(256), url varchar(256) primary key, time varchar(16))""")
             self.conn.commit()
         else:
-            self.conn = sqlite3.connect(db_file_path)
+            self.conn = sqlite3.connect(spider.out_db_file)
 
     def process_item(self, item, spider):
         if item['title']:
@@ -96,12 +95,3 @@ class FinNewsPipeline(object):
         self.file.close()
         self.conn.commit()
         self.conn.close()
-
-if __name__ == '__main__':
-    assert len(sys.argv) >= 2, "FinNewsSpider script should have enought arguments like: python fin_news_spider.py data_path [full]"
-    data_path = sys.argv[1]
-    full = False
-    if len(sys.argv) >= 3:
-        full = True if sys.argv[2].lower() == 'full' else False
-    spiders = Spiders([FinNewsSpider], data_path=data_path, full=full)
-    spiders.start()

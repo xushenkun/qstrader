@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os, sys
 from abc import ABCMeta, abstractmethod
+import yaml
 
 from scrapy                 import signals, Spider
 from pydispatch             import dispatcher
@@ -10,17 +12,15 @@ from scrapy.utils.project   import get_project_settings
 
 from newspaper import fulltext
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
+
 class AbstractSpider(Spider):
-    """
-    The AbstractSpider abstract class modifies
-    the quantity (or not) of any share transacted
-    """
 
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def other(self):
-        raise NotImplementedError("Should implement other()")
+    def config(self, conf):
+        raise NotImplementedError("Should implement config(conf)")
 
     def detail(self, response):
         item = response.meta.get('item')
@@ -33,29 +33,42 @@ class AbstractSpider(Spider):
             item['content'] = "".join([line for line in text if line])
             return item
 
-class Spiders(AbstractSpider):
-    """
-    Spiders is a collection of spider
-    """
-    def __init__(self, spiders, data_path, full, signal=signals.item_passed, slot=None):
-        self.spiders = spiders
-        self.data_path = data_path
-        self.full = full
+class Spiders(object):
+    def __init__(self, full, conf, active_ids=None, signal=signals.item_passed, slot=None):
+        self.full = full      
+        self.active_ids = active_ids
         self.signal = signal
         self.slot = slot
         self.process = None
+        self.config(conf)
+
+    def config(self, config_path):
+        with open(config_path) as fi:
+            conf = yaml.load(fi)
+            self.out_path = conf['out_path']
+            self.bot_name = conf['spider']['bot_name']
+            self.user_agent = conf['spider']['user_agent']
+            self.spider_confs = conf['spider']['classes']            
 
     def start(self):
-        settings = {"BOT_NAME": "QSpiders", "USER_AGENT": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.62 Safari/537.36"}
+        settings = {"BOT_NAME": self.bot_name, "USER_AGENT": self.user_agent, "SPIDER_MODULES": ['spider']}
         #settings = get_project_settings()
         self.process = CrawlerProcess(settings)
         if (self.slot is not None):
             dispatcher.connect(self.slot, self.signal)
-        for spider in self.spiders:
-            self.process.crawl(spider, data_path=self.data_path, full=self.full)
+        for spider_conf in self.spider_confs:
+            if self.active_ids is None or spider_conf['id'] in self.active_ids:
+                self.process.crawl(spider_conf['name'], out_root_path=self.out_path, full=self.full, conf=spider_conf)
         self.process.start()
 
     def stop(self):
         if self.process:
             self.process.stop()
             self.process = None
+
+if __name__ == '__main__':
+    assert len(sys.argv) == 3, "Spider script should have enought arguments like: python base.py full|incr config_path"    
+    full = True if sys.argv[1].lower() == 'full' else False
+    config_path = sys.argv[2]
+    spiders = Spiders(full=full, conf=config_path, active_ids=None)
+    spiders.start()
