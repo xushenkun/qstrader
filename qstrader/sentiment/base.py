@@ -3,6 +3,7 @@
 
 import os, sys
 import yaml, six, inspect
+import logging.config
 from importlib import import_module
 from abc import ABCMeta, abstractmethod
 from pkgutil import iter_modules
@@ -33,23 +34,29 @@ class Sentiments(object):
     def __init__(self, full, conf, active_ids=None):
         self.full = full    
         self.active_ids = active_ids
-        self.sentiments = []        
+        self.sentiments = []     
+        self.logger = None   
         self.config(conf)
 
     def config(self, config_path):
         with open(config_path) as fi:
             conf = yaml.load(fi)
             self.out_path = conf['out_path']
+            self.log_conf_path = conf['log']['config_path']
+            with open(self.log_conf_path, 'r') as fi:
+                logging.config.dictConfig(yaml.load(fi))
+                self.logger = logging.getLogger('sentiment')  
             self.conf = conf['sentiment']
             self.sentiment_confs = conf['sentiment']['classes']
             self.sentiment_classes = self._load_sentiment_classes()
             for sc in self.sentiment_confs:
                 if (self.active_ids is None or sc['id'] in self.active_ids) and self.sentiment_classes.get(sc['name'], None):
-                    self.sentiments.append(self.sentiment_classes[sc['name']](self.out_path, self.full, sc))
+                    self.sentiments.append(self.sentiment_classes[sc['name']](self.out_path, self.full, sc, self.logger))
 
     def start(self):
         for s in self.sentiments:
             s.corpus()
+            s.train()
 
     def _load_sentiment_classes(self):
         classes = {}

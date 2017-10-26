@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
+import logging.config
 from abc import ABCMeta, abstractmethod
 import yaml
 
@@ -40,6 +41,7 @@ class Spiders(object):
         self.signal = signal
         self.slot = slot
         self.process = None
+        self.logger = None
         self.config(conf)
 
     def config(self, config_path):
@@ -48,9 +50,14 @@ class Spiders(object):
             self.out_path = conf['out_path']
             self.bot_name = conf['spider']['bot_name']
             self.user_agent = conf['spider']['user_agent']
-            self.spider_confs = conf['spider']['classes']            
+            self.spider_confs = conf['spider']['classes']      
+            self.log_conf_path = conf['log']['config_path']
+            with open(self.log_conf_path, 'r') as fi:
+                logging.config.dictConfig(yaml.load(fi))
+                self.logger = logging.getLogger('spider')      
 
     def start(self):
+        self.logger.info("start spider...")
         settings = {"BOT_NAME": self.bot_name, "USER_AGENT": self.user_agent, "SPIDER_MODULES": ['spider']}
         #settings = get_project_settings()
         self.process = CrawlerProcess(settings)
@@ -58,8 +65,9 @@ class Spiders(object):
             dispatcher.connect(self.slot, self.signal)
         for spider_conf in self.spider_confs:
             if self.active_ids is None or spider_conf['id'] in self.active_ids:
-                self.process.crawl(spider_conf['name'], out_root_path=self.out_path, full=self.full, conf=spider_conf)
+                self.process.crawl(spider_conf['name'], out_root_path=self.out_path, full=self.full, conf=spider_conf, logger=self.logger)
         self.process.start()
+        self.logger.info("end spider")
 
     def stop(self):
         if self.process:

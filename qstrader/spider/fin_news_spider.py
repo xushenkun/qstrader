@@ -6,6 +6,7 @@ import sys
 import json
 import sqlite3
 import datetime
+import logging.config
 
 import scrapy
 from scrapy import Item, Field
@@ -20,12 +21,13 @@ class FinNewsSpider(AbstractSpider):
     name = "Finance News Spider"
     custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG', 'DOWNLOAD_DELAY': 0.25}
 
-    def __init__(self, out_root_path, full, conf, *args, **kwargs):    
+    def __init__(self, out_root_path, full, conf, logger, *args, **kwargs):    
         self.out_root_path = out_root_path
         self.full = full
         self.ids_seen = set()
         self.config(conf)
         super(FinNewsSpider, self).__init__(*args, **kwargs)
+        self.logger = logger if logger is not None else logging.getLogger()
 
     def config(self, conf):
         self.seeds = conf['seeds']
@@ -91,6 +93,7 @@ class FinNewsPipeline(object):
             return item
         else:
             raise DropItem("Missing title in %s" % item)
+
     def close_spider(self, spider):
         self.file.close()
         self.conn.commit()

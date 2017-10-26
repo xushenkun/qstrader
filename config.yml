@@ -1,4 +1,7 @@
 
+log:
+  config_path:  "D:\\git\\fintech\\qstrader\\logging.yml"
+
 out_path:       "D:\\git\\fintech\\qstrader\\data\\out"
 
 spider:
@@ -12,14 +15,24 @@ spider:
       out_folder:     "spider"
       out_db_file:    "fin_news.db"
       out_news_file:  "fin_news.txt"    
-      full_max_page:  1
-      incr_max_page:  1
+      full_max_page:  100
+      incr_max_page:  10
 
 sentiment:
   classes:
-    - id:           0
-      name:         "Finance News Sentiment"
-      in_news_file: "spider/fin_news.txt"
-      out_folder:   "sentiment"
-      out_seg_file: "fin_news.seg"
+    - id:             0
+      name:           "Finance News Sentiment"
+      topic:
+        num_topics:   200
+        eval_every:   5
+        chunksize:    10
+        workers:      4
+        passes:       3        
+      in_news_file:   "spider/fin_news.txt"
+      out_folder:     "sentiment"
+      out_id_file:    "fin_news.ids"
+      out_seg_file:   "fin_news.seg"
+      out_dic_file:   "fin_news.dic"
+      out_d2b_file:   "fin_news.d2b"
+      out_tfidf_file: "fin_news.tfidf"
     

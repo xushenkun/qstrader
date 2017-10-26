@@ -1,0 +1,75 @@
+version: 1
+disable_existing_loggers: False
+
+formatters:
+  simple: 
+    format:  "%(asctime)s %(name)-12s: %(levelname)-8s %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+  full:
+    format:  "%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+handlers: 
+  console:
+    class:        logging.StreamHandler
+    level:        INFO
+    formatter:    simple
+  spider_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\spider.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+  sentiment_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\sentiment.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+  scrapy_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\scrapy.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+  gensim_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\gensim.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+
+loggers:
+  spider:
+    level:      DEBUG
+    handlers:   [console, spider_rotate]
+    propagate:  yes
+    qualname:   spider
+  sentiment:
+    level:      DEBUG
+    handlers:   [console, sentiment_rotate]
+    propagate:  yes
+    qualname:   sentiment
+  scrapy:
+    level:      DEBUG
+    handlers:   [scrapy_rotate]
+    propagate:  yes
+    qualname:   scrapy
+  gensim:
+    level:      DEBUG
+    handlers:   [gensim_rotate]
+    propagate:  yes
+    qualname:   gensim
+
+roots:
+  level:      DEBUG
+  handlers:   [console]
+  propagate:  true
