@@ -10,17 +10,21 @@ import jieba
 from gensim import corpora, models
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 from base import AbstractSentiment
+from data.tushare_data import TushareData
 
 class FinNewsSentiment(AbstractSentiment):
 
     name = "Finance News Sentiment"
 
-    def __init__(self, out_root_path, full, conf, logger=None):
-        self.out_root_path = out_root_path
+    def __init__(self, global_conf, full, conf, logger=None):
+        self.out_root_path = global_conf['out_path']
+        self.stopword_file = global_conf['stopword_file']
         self.full = full
         self.config(conf)
-        self.logger = logger if logger is not None else logging.getLogger()
+        self.logger = logger if logger is not None else logging.getLogger('sentiment')
+        self.tushare = TushareData(global_conf, full, global_conf['data']['tushare'])
 
     def config(self, conf):
         self.topic_conf = conf['topic']
@@ -31,6 +35,14 @@ class FinNewsSentiment(AbstractSentiment):
         self.out_dic_file = os.path.join(self.out_path, conf['out_dic_file'])
         self.out_d2b_file = os.path.join(self.out_path, conf['out_d2b_file'])
         self.out_tfidf_file = os.path.join(self.out_path, conf['out_tfidf_file'])
+        self.out_d2v_file = os.path.join(self.out_path, conf['out_d2v_file'])
+
+        self.stopwords = []
+        with open(self.stopword_file, mode='r', encoding='utf-8') as fi:
+            line = fi.readline()
+            while line:
+                self.stopwords.append(line.strip())
+                line = fi.readline()
 
     def corpus(self):
         if not os.path.exists(self.in_news_file):
@@ -55,6 +67,9 @@ class FinNewsSentiment(AbstractSentiment):
         start_time = time.time()
         self.logger.info("start dictionary...")
         self.dictionary = corpora.Dictionary(self.corpus_docs, prune_at=None)
+        del_num_ids = [self.dictionary.token2id[word] for word in self.dictionary.values() if self._is_number(word) or word in self.stopwords]
+        self.dictionary.filter_tokens(del_num_ids)
+        self.dictionary.compactify()
         self.dictionary.save(self.out_dic_file)
         self.logger.info("end dictionary cost %ds" % (time.time() - start_time))
         self.docbow = []
@@ -79,8 +94,30 @@ class FinNewsSentiment(AbstractSentiment):
             eval_every=self.topic_conf['eval_every'], batch=False, chunksize=self.topic_conf['chunksize'],
             passes=self.topic_conf['passes'], 
             workers=self.topic_conf['workers'])
+        self.lda_model.save(self.topic_conf['out_model_file'])
         self.logger.info("end train topic model cost %ds" % (time.time() - start_time))
+        start_time = time.time()
+        self.logger.info("start doc topic...")
+        self.lda_d2v = self.lda_model[self.tfidf]
+        corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
+        self.logger.info("end doc topic cost %ds" % (time.time() - start_time))
 
     def load(self):
         raise NotImplementedError("Should implement load()")
 
+    def _is_number(self, s):
+        if self.tushare.is_stock_code(s):
+            return False
+        try:
+            float(s)
+            return True
+        except ValueError:
+            pass 
+        try:
+            import unicodedata
+            unicodedata.numeric(s)
+            return True
+        except (TypeError, ValueError):
+            pass
+        return False
+        

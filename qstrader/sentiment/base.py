@@ -40,18 +40,16 @@ class Sentiments(object):
 
     def config(self, config_path):
         with open(config_path) as fi:
-            conf = yaml.load(fi)
-            self.out_path = conf['out_path']
-            self.log_conf_path = conf['log']['config_path']
+            self.global_conf = yaml.load(fi)
+            self.log_conf_path = self.global_conf['log']['config_path']
             with open(self.log_conf_path, 'r') as fi:
                 logging.config.dictConfig(yaml.load(fi))
                 self.logger = logging.getLogger('sentiment')  
-            self.conf = conf['sentiment']
-            self.sentiment_confs = conf['sentiment']['classes']
+            self.sentiment_confs = self.global_conf['sentiment']['classes']
             self.sentiment_classes = self._load_sentiment_classes()
             for sc in self.sentiment_confs:
                 if (self.active_ids is None or sc['id'] in self.active_ids) and self.sentiment_classes.get(sc['name'], None):
-                    self.sentiments.append(self.sentiment_classes[sc['name']](self.out_path, self.full, sc, self.logger))
+                    self.sentiments.append(self.sentiment_classes[sc['name']](self.global_conf, self.full, sc, self.logger))
 
     def start(self):
         for s in self.sentiments:

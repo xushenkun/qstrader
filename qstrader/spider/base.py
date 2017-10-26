@@ -46,12 +46,11 @@ class Spiders(object):
 
     def config(self, config_path):
         with open(config_path) as fi:
-            conf = yaml.load(fi)
-            self.out_path = conf['out_path']
-            self.bot_name = conf['spider']['bot_name']
-            self.user_agent = conf['spider']['user_agent']
-            self.spider_confs = conf['spider']['classes']      
-            self.log_conf_path = conf['log']['config_path']
+            self.global_conf = yaml.load(fi)
+            self.bot_name = self.global_conf['spider']['bot_name']
+            self.user_agent = self.global_conf['spider']['user_agent']
+            self.spider_confs = self.global_conf['spider']['classes']      
+            self.log_conf_path = self.global_conf['log']['config_path']
             with open(self.log_conf_path, 'r') as fi:
                 logging.config.dictConfig(yaml.load(fi))
                 self.logger = logging.getLogger('spider')      
@@ -65,7 +64,7 @@ class Spiders(object):
             dispatcher.connect(self.slot, self.signal)
         for spider_conf in self.spider_confs:
             if self.active_ids is None or spider_conf['id'] in self.active_ids:
-                self.process.crawl(spider_conf['name'], out_root_path=self.out_path, full=self.full, conf=spider_conf, logger=self.logger)
+                self.process.crawl(spider_conf['name'], global_conf=self.global_conf, full=self.full, conf=spider_conf, logger=self.logger)
         self.process.start()
         self.logger.info("end spider")
 

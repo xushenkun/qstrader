@@ -21,13 +21,13 @@ class FinNewsSpider(AbstractSpider):
     name = "Finance News Spider"
     custom_settings = {'ITEM_PIPELINES': {'fin_news_spider.FinNewsPipeline': 100}, 'LOG_LEVEL': 'DEBUG', 'DOWNLOAD_DELAY': 0.25}
 
-    def __init__(self, out_root_path, full, conf, logger, *args, **kwargs):    
-        self.out_root_path = out_root_path
+    def __init__(self, global_conf, full, conf, logger, *args, **kwargs):    
+        self.out_root_path = global_conf['out_path']
         self.full = full
         self.ids_seen = set()
         self.config(conf)
         super(FinNewsSpider, self).__init__(*args, **kwargs)
-        self.logger = logger if logger is not None else logging.getLogger()
+        self.logger = logger if logger is not None else logging.getLogger('spider')
 
     def config(self, conf):
         self.seeds = conf['seeds']

@@ -2,7 +2,11 @@
 log:
   config_path:  "D:\\git\\fintech\\qstrader\\logging.yml"
 
-out_path:       "D:\\git\\fintech\\qstrader\\data\\out"
+out_path:       "D:\\git\\fintech\\qstrader\\out"
+
+data_path:      "D:\\git\\fintech\\qstrader\\data"
+
+stopword_file:  "D:\\git\\fintech\\qstrader\\data\\basic\\stopword.txt"
 
 spider:
   bot_name:   "QSpiders"
@@ -23,11 +27,12 @@ sentiment:
     - id:             0
       name:           "Finance News Sentiment"
       topic:
-        num_topics:   200
-        eval_every:   5
-        chunksize:    10
-        workers:      4
-        passes:       3        
+        num_topics:     200
+        eval_every:     5
+        chunksize:      10
+        workers:        4
+        passes:         3
+        out_model_file: "fin_news.tpc"        
       in_news_file:   "spider/fin_news.txt"
       out_folder:     "sentiment"
       out_id_file:    "fin_news.ids"
@@ -35,4 +40,8 @@ sentiment:
       out_dic_file:   "fin_news.dic"
       out_d2b_file:   "fin_news.d2b"
       out_tfidf_file: "fin_news.tfidf"
+      out_d2v_file:   "fin_news.d2v"
     
+data:
+  tushare:
+    basic_stock_file: "basic/stock_%s.csv"

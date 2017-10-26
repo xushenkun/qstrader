@@ -18,7 +18,7 @@ handlers:
     class:        logging.handlers.RotatingFileHandler
     level:        DEBUG
     formatter:    full
-    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\spider.log"
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\spider.log"
     maxBytes:     104857600
     backupCount:  5
     encoding:     "utf8"
@@ -26,7 +26,7 @@ handlers:
     class:        logging.handlers.RotatingFileHandler
     level:        DEBUG
     formatter:    full
-    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\sentiment.log"
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\sentiment.log"
     maxBytes:     104857600
     backupCount:  5
     encoding:     "utf8"
@@ -34,7 +34,7 @@ handlers:
     class:        logging.handlers.RotatingFileHandler
     level:        DEBUG
     formatter:    full
-    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\scrapy.log"
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\scrapy.log"
     maxBytes:     104857600
     backupCount:  5
     encoding:     "utf8"
@@ -42,7 +42,15 @@ handlers:
     class:        logging.handlers.RotatingFileHandler
     level:        DEBUG
     formatter:    full
-    filename:     "D:\\git\\fintech\\qstrader\\data\\out\\logs\\gensim.log"
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\gensim.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+  tushare_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\tushare.log"
     maxBytes:     104857600
     backupCount:  5
     encoding:     "utf8"
@@ -68,6 +76,11 @@ loggers:
     handlers:   [gensim_rotate]
     propagate:  yes
     qualname:   gensim
+  tushare:
+    level:      DEBUG
+    handlers:   [tushare_rotate]
+    propagate:  yes
+    qualname:   tushare
 
 roots:
   level:      DEBUG
