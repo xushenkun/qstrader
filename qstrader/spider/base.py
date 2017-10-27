@@ -9,6 +9,7 @@ from scrapy                 import signals, Spider
 from pydispatch             import dispatcher
 from scrapy.crawler         import CrawlerProcess
 from scrapy.utils.project   import get_project_settings
+from scrapy.utils.log import configure_logging
 
 from newspaper import fulltext
 
@@ -35,7 +36,7 @@ class AbstractSpider(Spider):
                     item['content'] = "".join([line for line in text if line])
                     return item
                 except Exception as e:
-                    self.more_logger.error("full text error for %s" % item.get('url'))
+                    logger.error("full text error for %s" % item.get('url'))
 
 class Spiders(object):
     def __init__(self, full, conf, active_ids=None, signal=signals.item_passed, slot=None):
@@ -55,7 +56,9 @@ class Spiders(object):
             self.spider_confs = self.global_conf['spider']['classes']      
             self.log_conf_path = self.global_conf['log']['config_path']
             with open(self.log_conf_path, 'r') as fi:
-                logging.config.dictConfig(yaml.load(fi))
+                log_settings = yaml.load(fi)
+                #configure_logging(settings=log_settings, install_root_handler=False)
+                logging.config.dictConfig(log_settings)
                 self.logger = logging.getLogger('spider')      
 
     def start(self):

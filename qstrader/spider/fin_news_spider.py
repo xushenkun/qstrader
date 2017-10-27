@@ -29,7 +29,7 @@ class FinNewsSpider(AbstractSpider):
         self.ids_seen = set()
         self.config(conf)
         super(FinNewsSpider, self).__init__(*args, **kwargs)
-        self.more_logger = logger if logger is not None else logging.getLogger('spider')
+        logger = logger if logger is not None else logging.getLogger('spider')
 
     def config(self, conf):
         self.seeds = conf['seeds']

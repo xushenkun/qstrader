@@ -8,6 +8,8 @@ import itertools
 import logging.config
 
 import numpy as np
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy as sch
 from gensim import corpora, models
 import filelock
 
@@ -72,6 +74,7 @@ class FinNewsSentiment(AbstractSentiment):
                 corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
             with open(self.out_id_file,'w') as fo:
                 fo.write("\n".join(self.sentiment_ids))
+            self._cluster()
             self.logger.info("end train model cost %ds" % (time.time() - start_time))
 
     def load(self):
@@ -81,7 +84,7 @@ class FinNewsSentiment(AbstractSentiment):
                 self.sentiment_ids.append(line.strip())
                 line = fi.readline()
         self.lda_model = models.LdaMulticore.load(self.out_tpc_file, mmap='r')
-        self.lda_d2v = corpora.MmCorpus(self.out_d2v_file)
+        self.lda_d2v = list(corpora.MmCorpus(self.out_d2v_file))
 
     def _find_tfidf(self, more_ids):
         all_tfidf = self.corpus.tfidf
@@ -100,3 +103,15 @@ class FinNewsSentiment(AbstractSentiment):
             rank = np.searchsorted(all_ids, more_ids, sorter=sorter)
             tfidf_pos = sorter[rank]
             return more_ids, list(self.corpus.tfidf[tfidf_pos])
+
+    def _cluster(self):
+        start_time = time.time()
+        self.logger.info("start cluster...")
+        self.logger.info(self.lda_d2v)
+        dist_matrix = sch.distance.pdist(self.lda_d2v, 'euclidean')
+        link_matrix = sch.linkage(dist_matrix, method='average')
+        tree_dict = sch.dendrogram(link_matrix)
+        plt.show()
+        cluster= sch.fcluster(link_matrix, t=1, criterion='inconsistent') 
+        self.logger.info(cluster)
+        self.logger.info("end cluster cost %ds" % (time.time() - start_time))
