@@ -4,15 +4,16 @@
 import os
 import sys
 import time
+import itertools
 import logging.config
 
-import jieba
+import numpy as np
 from gensim import corpora, models
+import filelock
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
-from base import AbstractSentiment
-from data.tushare_data import TushareData
+from sentiment.base import AbstractSentiment
+from corpus.fin_news_corpus import FinNewsCorpus
 
 class FinNewsSentiment(AbstractSentiment):
 
@@ -20,104 +21,82 @@ class FinNewsSentiment(AbstractSentiment):
 
     def __init__(self, global_conf, full, conf, logger=None):
         self.out_root_path = global_conf['out_path']
-        self.stopword_file = global_conf['stopword_file']
+        self.lock_timeout = global_conf['lock_timeout']
         self.full = full
         self.config(conf)
         self.logger = logger if logger is not None else logging.getLogger('sentiment')
-        self.tushare = TushareData(global_conf, full, global_conf['data']['tushare'])
+        self.corpus = FinNewsCorpus(global_conf, full, global_conf['corpus']['classes'][0])
 
-    def config(self, conf):
-        self.topic_conf = conf['topic']
-        self.in_news_file = os.path.join(self.out_root_path, conf['in_news_file'])
+        self.sentiment_ids = []
+        self.lda_model = None    
+        self.lda_d2v = None
+
+    def config(self, conf):        
         self.out_path = os.path.join(self.out_root_path, conf['out_folder'])
+        self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_id_file = os.path.join(self.out_path, conf['out_id_file'])
-        self.out_seg_file = os.path.join(self.out_path, conf['out_seg_file'])
-        self.out_dic_file = os.path.join(self.out_path, conf['out_dic_file'])
-        self.out_d2b_file = os.path.join(self.out_path, conf['out_d2b_file'])
-        self.out_tfidf_file = os.path.join(self.out_path, conf['out_tfidf_file'])
+        self.out_tpc_file = os.path.join(self.out_path, conf['out_tpc_file'])
         self.out_d2v_file = os.path.join(self.out_path, conf['out_d2v_file'])
-
-        self.stopwords = []
-        with open(self.stopword_file, mode='r', encoding='utf-8') as fi:
-            line = fi.readline()
-            while line:
-                self.stopwords.append(line.strip())
-                line = fi.readline()
-
-    def corpus(self):
-        if not os.path.exists(self.in_news_file):
-            raise Exception('No input news file found')
-        self.corpus_docs = []
-        self.corpus_ids = []
-        start_time = time.time()
-        self.logger.info("start word segment...")
-        with open(self.in_news_file, mode='r+', encoding='utf-8') as fi:
-            with open(self.out_seg_file, mode='w+', encoding='utf-8') as fo:
-                line = fi.readline()
-                while line:
-                    line = line.split('\t')
-                    self.corpus_ids.append(line[0])
-                    line = list(jieba.cut(line[4]))
-                    self.corpus_docs.append(line)
-                    fo.write(" ".join(line))
-                    line = fi.readline()
-        self.logger.info("end word segment cost %ds" % (time.time() - start_time))
-        with open(self.out_id_file,'w') as fo:
-            fo.write("\n".join(self.corpus_ids))
-        start_time = time.time()
-        self.logger.info("start dictionary...")
-        self.dictionary = corpora.Dictionary(self.corpus_docs, prune_at=None)
-        del_num_ids = [self.dictionary.token2id[word] for word in self.dictionary.values() if self._is_number(word) or word in self.stopwords]
-        self.dictionary.filter_tokens(del_num_ids)
-        self.dictionary.compactify()
-        self.dictionary.save(self.out_dic_file)
-        self.logger.info("end dictionary cost %ds" % (time.time() - start_time))
-        self.docbow = []
-        start_time = time.time()
-        self.logger.info("start doc2bow...")
-        for doc in self.corpus_docs:
-            self.docbow.append(self.dictionary.doc2bow(doc, allow_update=False))
-        corpora.MmCorpus.serialize(self.out_d2b_file, self.docbow)
-        self.logger.info("end doc2bow cost %ds" % (time.time() - start_time))
-        start_time = time.time()
-        self.logger.info("start tfidf...")
-        self.tfidf_model = models.TfidfModel(self.docbow)
-        self.tfidf = self.tfidf_model[self.docbow]
-        corpora.MmCorpus.serialize(self.out_tfidf_file, self.tfidf)
-        self.logger.info("end tfidf cost %ds" % (time.time() - start_time))
+        topic_conf = conf['topic']
+        self.num_topics = topic_conf['num_topics']
+        self.eval_every = topic_conf['eval_every']
+        self.chunksize = topic_conf['chunksize']
+        self.passes = topic_conf['passes']
+        self.workers = topic_conf['workers']
 
     def train(self):
-        start_time = time.time()
-        self.logger.info("start train topic model...")
-        self.lda_model = models.LdaMulticore(self.tfidf, id2word=self.dictionary, 
-            num_topics=self.topic_conf['num_topics'], 
-            eval_every=self.topic_conf['eval_every'], batch=False, chunksize=self.topic_conf['chunksize'],
-            passes=self.topic_conf['passes'], 
-            workers=self.topic_conf['workers'])
-        self.lda_model.save(self.topic_conf['out_model_file'])
-        self.logger.info("end train topic model cost %ds" % (time.time() - start_time))
-        start_time = time.time()
-        self.logger.info("start doc topic...")
-        self.lda_d2v = self.lda_model[self.tfidf]
-        corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
-        self.logger.info("end doc topic cost %ds" % (time.time() - start_time))
+        lock = filelock.FileLock(self.out_lock_file)
+        with lock.acquire(timeout=self.lock_timeout):
+            self.corpus.load()
+            start_time = time.time()
+            self.logger.info("start train model...")
+            if not self.full:
+                self.load()
+                more_ids = np.setdiff1d(self.corpus.corpus_ids, self.sentiment_ids)            
+                if more_ids is not None and len(more_ids)>0:                
+                    more_ids, more_tfidf = self._find_tfidf(more_ids)
+                    if more_tfidf:
+                        self.sentiment_ids.extend(more_ids)
+                        self.lda_model.update(more_tfidf)
+                        self.lda_model.save(self.out_tpc_file)
+                        more_d2v = self.lda_model[more_tfidf]
+                        self.lda_d2v = list(itertools.chain(self.lda_d2v, more_d2v))
+                        corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
+            else:
+                self.sentiment_ids = self.corpus.corpus_ids
+                self.lda_model = models.LdaMulticore(self.corpus.tfidf, id2word=self.corpus.dictionary, 
+                    num_topics=self.num_topics, eval_every=self.eval_every, batch=False, chunksize=self.chunksize,
+                    passes=self.passes, workers=self.workers)
+                self.lda_model.save(self.out_tpc_file)        
+                self.lda_d2v = self.lda_model[self.corpus.tfidf]        
+                corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
+            with open(self.out_id_file,'w') as fo:
+                fo.write("\n".join(self.sentiment_ids))
+            self.logger.info("end train model cost %ds" % (time.time() - start_time))
 
     def load(self):
-        raise NotImplementedError("Should implement load()")
+        with open(self.out_id_file,'r') as fi:
+            line = fi.readline()
+            while line:
+                self.sentiment_ids.append(line.strip())
+                line = fi.readline()
+        self.lda_model = models.LdaMulticore.load(self.out_tpc_file, mmap='r')
+        self.lda_d2v = corpora.MmCorpus(self.out_d2v_file)
 
-    def _is_number(self, s):
-        if self.tushare.is_stock_code(s):
-            return False
-        try:
-            float(s)
-            return True
-        except ValueError:
-            pass 
-        try:
-            import unicodedata
-            unicodedata.numeric(s)
-            return True
-        except (TypeError, ValueError):
-            pass
-        return False
-        
+    def _find_tfidf(self, more_ids):
+        all_tfidf = self.corpus.tfidf
+        more_ids = np.array(more_ids)
+        all_ids = np.array(self.corpus.corpus_ids)
+        if not self.full:
+            rets = np.where(all_ids==more_ids[:,None])
+            if rets is None or rets==False or len(rets) < 2:
+                return [], []
+            more_pos, tfidf_pos = rets[0], rets[1]
+            more_ids = more_ids[more_pos]
+            more_tfidf = list(self.corpus.tfidf[tfidf_pos])
+            return more_ids, more_tfidf
+        else:            
+            sorter = np.argsort(all_ids)
+            rank = np.searchsorted(all_ids, more_ids, sorter=sorter)
+            tfidf_pos = sorter[rank]
+            return more_ids, list(self.corpus.tfidf[tfidf_pos])

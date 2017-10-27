@@ -10,8 +10,6 @@ import logging.config
 import pandas as pd
 import tushare as ts
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
-
 class TushareData(object):
 
     name = "Tushare Data"

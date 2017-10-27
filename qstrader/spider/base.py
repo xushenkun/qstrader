@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, sys
+import os, sys, yaml
 import logging.config
 from abc import ABCMeta, abstractmethod
-import yaml
 
 from scrapy                 import signals, Spider
 from pydispatch             import dispatcher
@@ -28,11 +27,15 @@ class AbstractSpider(Spider):
         if item is not None:
             #response.css('div.art_contextBox')
             html = response.body_as_unicode()
-            text = fulltext(html, language='zh')
-            text = text.split()
-            text = [line.strip() for line in text]
-            item['content'] = "".join([line for line in text if line])
-            return item
+            if html:
+                try:
+                    text = fulltext(html, language='zh')
+                    text = text.split()
+                    text = [line.strip() for line in text]
+                    item['content'] = "".join([line for line in text if line])
+                    return item
+                except Exception as e:
+                    self.more_logger.error("full text error for %s" % item.get('url'))
 
 class Spiders(object):
     def __init__(self, full, conf, active_ids=None, signal=signals.item_passed, slot=None):

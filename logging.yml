@@ -1,5 +1,5 @@
 version: 1
-disable_existing_loggers: False
+disable_existing_loggers: True
 
 formatters:
   simple: 
@@ -19,6 +19,14 @@ handlers:
     level:        DEBUG
     formatter:    full
     filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\spider.log"
+    maxBytes:     104857600
+    backupCount:  5
+    encoding:     "utf8"
+  corpus_rotate:
+    class:        logging.handlers.RotatingFileHandler
+    level:        DEBUG
+    formatter:    full
+    filename:     "D:\\git\\fintech\\qstrader\\out\\logs\\corpus.log"
     maxBytes:     104857600
     backupCount:  5
     encoding:     "utf8"
@@ -61,6 +69,11 @@ loggers:
     handlers:   [console, spider_rotate]
     propagate:  yes
     qualname:   spider
+  corpus:
+    level:      DEBUG
+    handlers:   [console, corpus_rotate]
+    propagate:  yes
+    qualname:   corpus
   sentiment:
     level:      DEBUG
     handlers:   [console, sentiment_rotate]

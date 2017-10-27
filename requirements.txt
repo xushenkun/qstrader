@@ -27,3 +27,4 @@ demjson>=2.2.4
 newspaper3k>=0.2.5
 gensim>=2.3.0
 tushare>=0.8.2
+filelock>=2.0.11

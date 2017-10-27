@@ -12,9 +12,10 @@ import scrapy
 from scrapy import Item, Field
 from scrapy.exceptions import DropItem
 import demjson
+import filelock
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '.')
-from base import AbstractSpider, Spiders
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
+from spider.base import AbstractSpider
 
 class FinNewsSpider(AbstractSpider):
 
@@ -23,15 +24,17 @@ class FinNewsSpider(AbstractSpider):
 
     def __init__(self, global_conf, full, conf, logger, *args, **kwargs):    
         self.out_root_path = global_conf['out_path']
+        self.lock_timeout = global_conf['lock_timeout']
         self.full = full
         self.ids_seen = set()
         self.config(conf)
         super(FinNewsSpider, self).__init__(*args, **kwargs)
-        self.logger = logger if logger is not None else logging.getLogger('spider')
+        self.more_logger = logger if logger is not None else logging.getLogger('spider')
 
     def config(self, conf):
         self.seeds = conf['seeds']
         self.out_path = os.path.join(self.out_root_path, conf.get('out_folder'))
+        self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_db_file = os.path.join(self.out_path, conf['out_db_file'])
         self.out_news_file = os.path.join(self.out_path, conf['out_news_file'])
         self.max_page = conf['full_max_page'] if self.full else conf['incr_max_page']
@@ -45,10 +48,12 @@ class FinNewsSpider(AbstractSpider):
             conn.close()
 
     def start_requests(self):
-        for p in range(self.max_page, 0, -1):
-            for seed in self.seeds:
-                url = "%s&page=%d&date=%s" % (seed, p, datetime.datetime.now().strftime('%Y-%m-%d'))
-                yield scrapy.Request(url=url, callback=self.parse)
+        lock = filelock.FileLock(self.out_lock_file)
+        with lock.acquire(timeout=self.lock_timeout):
+            for p in range(self.max_page, 0, -1):
+                for seed in self.seeds:
+                    url = "%s&page=%d&date=%s" % (seed, p, datetime.datetime.now().strftime('%Y-%m-%d'))
+                    yield scrapy.Request(url=url, callback=self.parse)
 
     def parse(self, response):
         rsp = demjson.decode(response.body_as_unicode())

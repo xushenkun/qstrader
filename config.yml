@@ -8,6 +8,8 @@ data_path:      "D:\\git\\fintech\\qstrader\\data"
 
 stopword_file:  "D:\\git\\fintech\\qstrader\\data\\basic\\stopword.txt"
 
+lock_timeout:   10
+
 spider:
   bot_name:   "QSpiders"
   user_agent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.62 Safari/537.36"
@@ -17,10 +19,28 @@ spider:
       seeds:
         - "http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106"
       out_folder:     "spider"
+      out_lock_file:  "fin_news.lock"
       out_db_file:    "fin_news.db"
       out_news_file:  "fin_news.txt"    
       full_max_page:  100
       incr_max_page:  10
+
+corpus:
+  classes:
+    - id:             0
+      name:           "Finance News Corpus"
+      dictionary:
+        no_below:     2
+        no_above:     0.5
+        keep_n:       100000
+      in_news_file:   "spider/fin_news.txt"
+      out_folder:     "corpus"
+      out_lock_file:  "fin_news.lock"
+      out_id_file:    "fin_news.ids"
+      out_seg_file:   "fin_news.seg"
+      out_dic_file:   "fin_news.dic"
+      out_d2b_file:   "fin_news.d2b"
+      out_tfidf_file: "fin_news.tfidf"
 
 sentiment:
   classes:
@@ -29,18 +49,14 @@ sentiment:
       topic:
         num_topics:     200
         eval_every:     5
-        chunksize:      10
+        chunksize:      50
         workers:        4
-        passes:         3
-        out_model_file: "fin_news.tpc"        
-      in_news_file:   "spider/fin_news.txt"
-      out_folder:     "sentiment"
-      out_id_file:    "fin_news.ids"
-      out_seg_file:   "fin_news.seg"
-      out_dic_file:   "fin_news.dic"
-      out_d2b_file:   "fin_news.d2b"
-      out_tfidf_file: "fin_news.tfidf"
-      out_d2v_file:   "fin_news.d2v"
+        passes:         1
+      out_folder:       "sentiment"
+      out_lock_file:    "fin_news.lock"
+      out_id_file:      "fin_news.ids"
+      out_tpc_file:     "fin_news.tpc"   
+      out_d2v_file:     "fin_news.d2v"
     
 data:
   tushare:
