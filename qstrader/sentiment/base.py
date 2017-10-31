@@ -33,10 +33,10 @@ class Sentiments(object):
         self.config(conf)
 
     def config(self, config_path):
-        with open(config_path) as fi:
+        with open(config_path, 'r', encoding='utf-8') as fi:
             self.global_conf = yaml.load(fi)
             self.log_conf_path = self.global_conf['log']['config_path']
-            with open(self.log_conf_path, 'r') as fi:
+            with open(self.log_conf_path, 'r', encoding='utf-8') as fi:
                 logging.config.dictConfig(yaml.load(fi))
                 self.logger = logging.getLogger('sentiment')  
             self.sentiment_confs = self.global_conf['sentiment']['classes']

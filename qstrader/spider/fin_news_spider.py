@@ -33,6 +33,7 @@ class FinNewsSpider(AbstractSpider):
 
     def config(self, conf):
         self.seeds = conf['seeds']
+        self.title_filters = conf['title_filters']
         self.out_path = os.path.join(self.out_root_path, conf.get('out_folder'))
         self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_db_file = os.path.join(self.out_path, conf['out_db_file'])
@@ -66,8 +67,13 @@ class FinNewsSpider(AbstractSpider):
                 item['url'] = it.get('titleLink')
                 item['time'] = it.get('time')
                 if item['id'] not in self.ids_seen:
-                    self.ids_seen.add(item['id'])
-                    yield scrapy.Request(url=item['url'], meta={'item': item}, callback=self.detail)
+                    filtered = False
+                    for title_filter in self.title_filters:
+                        if title_filter in item['title']:
+                            filtered = True
+                    if not filtered:
+                        self.ids_seen.add(item['id'])
+                        yield scrapy.Request(url=item['url'], meta={'item': item}, callback=self.detail)
 
 class FinNewsItem(Item):
     id = Field()

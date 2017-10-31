@@ -49,13 +49,13 @@ class Spiders(object):
         self.config(conf)
 
     def config(self, config_path):
-        with open(config_path) as fi:
+        with open(config_path, 'r', encoding='utf-8') as fi:
             self.global_conf = yaml.load(fi)
             self.bot_name = self.global_conf['spider']['bot_name']
             self.user_agent = self.global_conf['spider']['user_agent']
             self.spider_confs = self.global_conf['spider']['classes']      
             self.log_conf_path = self.global_conf['log']['config_path']
-            with open(self.log_conf_path, 'r') as fi:
+            with open(self.log_conf_path, 'r', encoding='utf-8') as fi:
                 log_settings = yaml.load(fi)
                 #configure_logging(settings=log_settings, install_root_handler=False)
                 logging.config.dictConfig(log_settings)

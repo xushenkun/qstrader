@@ -18,6 +18,7 @@ spider:
       name: "Finance News Spider"
       seeds:
         - "http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106"
+      title_filters:  ["上海金交所", "十只个股"]
       out_folder:     "spider"
       out_lock_file:  "fin_news.lock"
       out_db_file:    "fin_news.db"
@@ -48,15 +49,24 @@ sentiment:
       name:           "Finance News Sentiment"
       topic:
         num_topics:     200
+        num_words:      100
         eval_every:     5
         chunksize:      50
         workers:        4
-        passes:         1
+        passes:         10
+      cluster:
+        num_clusters:   1000
+        d2c_file:       "fin_news.d2c"
+        d2c_fig_file:   "fin_news.png"
+        d2c_top_ratio:     0.003
+      keyword:
+        num_keywords:   30
       out_folder:       "sentiment"
       out_lock_file:    "fin_news.lock"
-      out_id_file:      "fin_news.ids"
+      out_id_file:      "fin_news.ids"      
       out_tpc_file:     "fin_news.tpc"   
       out_d2v_file:     "fin_news.d2v"
+
     
 data:
   tushare:

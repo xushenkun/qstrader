@@ -30,7 +30,8 @@ class FinNewsCorpus(AbstractCorpus):
         self.tushare = TushareData(global_conf, self.full, global_conf['data']['tushare'])
         self.stopwords = get_stop_word(self.stopword_file)
 
-        self.corpus_ids = []        
+        self.corpus_ids = []   
+        self.corpus_docs = []    
         self.dictionary = None     
         self.docbow = []
         self.tfidf = None
@@ -63,17 +64,22 @@ class FinNewsCorpus(AbstractCorpus):
                     self._dictionary(more_corpus_docs)
                 self._doc2bow(more_corpus_docs)
                 self._tfidf()
-            with open(self.out_id_file,'w') as fo:
+            with open(self.out_id_file, 'w', encoding='utf-8') as fo:
                 fo.write("\n".join(self.corpus_ids))
             self.logger.info("end generate cost %ds" % (time.time() - start_time))
 
     def load(self):
         start_time = time.time()
         self.logger.info("start load...")
-        with open(self.out_id_file,'r') as fi:
+        with open(self.out_id_file,'r', encoding='utf-8') as fi:
             line = fi.readline()
             while line:
                 self.corpus_ids.append(line.strip())
+                line = fi.readline()
+        with open(self.out_seg_file,'r', encoding='utf-8') as fi:
+            line = fi.readline()
+            while line:
+                self.corpus_docs.append(line.strip().split('\t'))
                 line = fi.readline()
         self.dictionary = corpora.Dictionary.load(self.out_dic_file, mmap='r')
         self.docbow = corpora.MmCorpus(self.out_d2b_file)
@@ -92,9 +98,9 @@ class FinNewsCorpus(AbstractCorpus):
                     line = line.split('\t')
                     if self.full or line[0] not in self.corpus_ids:
                         self.corpus_ids.append(line[0])
-                        line = list(jieba.cut(line[4]))
-                        more_corpus_docs.append(line)
-                        fo.write(" ".join(line))
+                        content = list(jieba.cut(line[4]))
+                        more_corpus_docs.append(content)
+                        fo.write("%s\t%s\t%s" % (line[0], line[1], " ".join(content)))
                     line = fi.readline()
         self.logger.info("end word segment cost %ds" % (time.time() - start_time))        
         return more_corpus_docs
