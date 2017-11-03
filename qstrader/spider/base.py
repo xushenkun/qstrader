@@ -33,10 +33,13 @@ class AbstractSpider(Spider):
                     text = fulltext(html, language='zh')
                     text = text.split()
                     text = [line.strip() for line in text]
-                    item['content'] = "".join([line for line in text if line])
-                    return item
+                    content = "".join([line for line in text if line])
+                    if content:
+                        item['content'] = content
+                        return item
                 except Exception as e:
-                    logger.error("full text error for %s" % item.get('url'))
+                    self.an_logger.error("full text error for %s" % item.get('url'))
+        return None
 
 class Spiders(object):
     def __init__(self, full, conf, active_ids=None, signal=signals.item_passed, slot=None):

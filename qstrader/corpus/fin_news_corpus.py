@@ -6,8 +6,10 @@ import sys
 import time
 import itertools
 import logging.config
+from collections import defaultdict
 
 import jieba
+import jieba.posseg as pseg
 from gensim import corpora, models
 import filelock
 
@@ -15,6 +17,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 from util.common import get_stop_word, is_number, is_punctuation
 from corpus.base import AbstractCorpus
 from data.tushare_data import TushareData
+
+POS_FOR_KEYWORD = ['an', 'i', 'j', 'l', 'n', 'nr', 'nrfg', 'ns', 'nt', 'nz', 't', 'v', 'vd', 'vn', 'eng']
 
 class FinNewsCorpus(AbstractCorpus):
 
@@ -32,6 +36,7 @@ class FinNewsCorpus(AbstractCorpus):
 
         self.corpus_ids = []   
         self.corpus_docs = []    
+        self.corpus_pos_docs = []
         self.dictionary = None     
         self.docbow = []
         self.tfidf = None
@@ -42,6 +47,7 @@ class FinNewsCorpus(AbstractCorpus):
         self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_id_file = os.path.join(self.out_path, conf['out_id_file'])
         self.out_seg_file = os.path.join(self.out_path, conf['out_seg_file'])
+        self.out_pos_file = os.path.join(self.out_path, conf['out_pos_file'])
         self.out_dic_file = os.path.join(self.out_path, conf['out_dic_file'])
         self.out_d2b_file = os.path.join(self.out_path, conf['out_d2b_file'])
         self.out_tfidf_file = os.path.join(self.out_path, conf['out_tfidf_file'])
@@ -55,7 +61,7 @@ class FinNewsCorpus(AbstractCorpus):
             start_time = time.time()
             self.logger.info("start generate...")
             if not os.path.exists(self.in_news_file):
-                raise Exception('Input file not found')        
+                raise Exception('Input file not found')
             if not self.full:
                 self.load()
             more_corpus_docs = self._segment()
@@ -81,10 +87,41 @@ class FinNewsCorpus(AbstractCorpus):
             while line:
                 self.corpus_docs.append(line.strip().split('\t'))
                 line = fi.readline()
+        with open(self.out_pos_file,'r', encoding='utf-8') as fi:
+            line = fi.readline()
+            while line:
+                self.corpus_pos_docs.append(line.strip().split('\t'))
+                line = fi.readline()
         self.dictionary = corpora.Dictionary.load(self.out_dic_file, mmap='r')
         self.docbow = corpora.MmCorpus(self.out_d2b_file)
         self.tfidf = corpora.MmCorpus(self.out_tfidf_file)
         self.logger.info("end load cost %ds" % (time.time() - start_time))
+
+    def keyword_graph(self, win_size=5, pos_words, allow_pos=POS_FOR_KEYWORD, check_oov=True):
+        pos_words = pos_words.split('\t')
+        length = len(pos_words)
+        pairs = defaultdict(int)
+        for i, pos_word in enumerate(pos_words):
+            pos_word = pos_word.split('/')
+            if (not check_oov or pos_word[0] in self.dictionary.token2id) and (allow_pos is None or pos_word[1] in allow_pos):
+                for j in range(i+1, i+win_size):
+                    if j >= length: break
+                    pw2 = pos_words[j]
+                    if (not check_oov or pw2[0] in self.dictionary.token2id) and (allow_pos is None or pw2[1] in allow_pos):
+                        pairs[(pos_word[0], pw2[0])] += 1
+
+
+
+    def pos_word_filter(self, pos_words, allow_pos=POS_FOR_KEYWORD, in_dictionary=True):
+        all_words, filter_words = [], []
+        pos_words = pos_words.split('\t')
+        for pos_word in pos_words:
+            pos_word = pos_word.split('/')
+            if not in_dictionary or pos_word[0] in self.dictionary.token2id:
+                all_words.append(pos_word[0])
+                if allow_pos is None or pos_word[1] in allow_pos:
+                    filter_words.append(pos_word[0])
+        return all_words, filter_words
 
     def _segment(self):
         more_corpus_docs = []
@@ -92,17 +129,22 @@ class FinNewsCorpus(AbstractCorpus):
         self.logger.info("start word segment...")
         with open(self.in_news_file, mode='r', encoding='utf-8') as fi:
             seg_file_mode = 'w' if self.full else 'a'
-            with open(self.out_seg_file, mode=seg_file_mode, encoding='utf-8') as fo:
-                line = fi.readline()
-                while line:
-                    line = line.split('\t')
-                    if self.full or line[0] not in self.corpus_ids:
-                        self.corpus_ids.append(line[0])
-                        content = list(jieba.cut(line[4]))
-                        more_corpus_docs.append(content)
-                        fo.write("%s\t%s\t%s" % (line[0], line[1], " ".join(content)))
+            pos_file_mode = 'w' if self.full else 'a'
+            with open(self.out_seg_file, mode=seg_file_mode, encoding='utf-8') as seg_fo:
+                with open(self.out_pos_file, mode=pos_file_mode, encoding='utf-8') as pos_fo:
                     line = fi.readline()
-        self.logger.info("end word segment cost %ds" % (time.time() - start_time))        
+                    while line:
+                        line = line.strip().split('\t')
+                        if self.full or line[1] not in self.corpus_ids:
+                            self.corpus_ids.append(line[1])
+                            pos_words = [wp for wp in pseg.cut(line[5])]
+                            pos_content = ["%s/%s"%(wp.word, wp.flag) for wp in pos_words]
+                            content = [wp.word for wp in pos_words]
+                            more_corpus_docs.append(content)
+                            seg_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(content)))
+                            pos_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(pos_content)))
+                        line = fi.readline()
+        self.logger.info("end word segment cost %ds" % (time.time() - start_time))
         return more_corpus_docs
 
     def _dictionary(self, corpus_docs):
@@ -114,6 +156,7 @@ class FinNewsCorpus(AbstractCorpus):
         self.dictionary.filter_tokens(del_num_ids)
         self.dictionary.compactify()
         self.dictionary.save(self.out_dic_file)
+        self.logger.info("dictionary length is %d" % len(self.dictionary))
         self.logger.info("end dictionary cost %ds" % (time.time() - start_time))
 
     def _doc2bow(self, corpus_docs):
@@ -132,4 +175,5 @@ class FinNewsCorpus(AbstractCorpus):
         self.tfidf_model = models.TfidfModel(self.docbow)
         self.tfidf = self.tfidf_model[self.docbow]
         corpora.MmCorpus.serialize(self.out_tfidf_file, self.tfidf)
+        self.logger.info("tfidf length is %d" % len(self.tfidf))
         self.logger.info("end tfidf cost %ds" % (time.time() - start_time))

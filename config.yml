@@ -17,7 +17,17 @@ spider:
     - id:   0
       name: "Finance News Spider"
       seeds:
-        - "http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106"
+        - url:            "http://roll.hexun.com/roolNews_listRool.action?type=all&ids=100,101,103,125,105,124,162,194,108,122,121,119,107,116,114,115,182,120,169,170,177,180,118,190,200,155,130,117,153,106&page=%d&date=%s"
+          name:           "hexun"
+          full_max_page:  100
+          incr_max_page:  10
+          enable:         True
+        - url:            "http://3g.163.com/touch/reconstruct/article/list/BA8EE5GMwangning/%d-%d.html"
+          name:           "netease_finance"          
+          full_max_page:  3
+          incr_max_page:  1
+          page_num:       100
+          enable :        True
       title_filters:  ["上海金交所", "十只个股"]
       out_folder:     "spider"
       out_lock_file:  "fin_news.lock"
@@ -39,6 +49,7 @@ corpus:
       out_lock_file:  "fin_news.lock"
       out_id_file:    "fin_news.ids"
       out_seg_file:   "fin_news.seg"
+      out_pos_file:   "fin_news.pos"
       out_dic_file:   "fin_news.dic"
       out_d2b_file:   "fin_news.d2b"
       out_tfidf_file: "fin_news.tfidf"
@@ -55,10 +66,10 @@ sentiment:
         workers:        4
         passes:         10
       cluster:
-        num_clusters:   1000
+        num_clusters_factor:   3
         d2c_file:       "fin_news.d2c"
         d2c_fig_file:   "fin_news.png"
-        d2c_top_ratio:     0.003
+        d2c_top_ratio:  0.02
       keyword:
         num_keywords:   30
       out_folder:       "sentiment"
