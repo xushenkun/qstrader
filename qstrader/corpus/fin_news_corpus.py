@@ -9,6 +9,7 @@ import logging.config
 from collections import defaultdict
 
 import jieba
+jieba.load_userdict(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + "userdict.txt")
 import jieba.posseg as pseg
 from gensim import corpora, models
 import filelock
@@ -18,7 +19,9 @@ from util.common import get_stop_word, is_number, is_punctuation
 from corpus.base import AbstractCorpus
 from data.tushare_data import TushareData
 
-POS_FOR_KEYWORD = ['an', 'i', 'j', 'l', 'n', 'nr', 'nrfg', 'ns', 'nt', 'nz', 't', 'v', 'vd', 'vn', 'eng']
+TOPIC_KEYWORD_POS_TAGS = ['an', 'i', 'j', 'l', 'n', 'nr', 'nrt', 'nrfg', 'ns', 'nt', 'nz', 'vn', 'eng']
+SENTENCE_DELIMITERS = ['?', '!', ';', '？', '！', '。', '；', '……', '…', '\n']
+KEYWORD_POS_TAGS = ['an', 'i', 'j', 'l', 'n', 'nr', 'nrt', 'nrfg', 'ns', 'nt', 'nz', 't', 'v', 'vd', 'vn', 'eng']
 
 class FinNewsCorpus(AbstractCorpus):
 
@@ -97,22 +100,33 @@ class FinNewsCorpus(AbstractCorpus):
         self.tfidf = corpora.MmCorpus(self.out_tfidf_file)
         self.logger.info("end load cost %ds" % (time.time() - start_time))
 
-    def keyword_graph(self, win_size=5, pos_words, allow_pos=POS_FOR_KEYWORD, check_oov=True):
-        pos_words = pos_words.split('\t')
+    def rank_keyword(self, pos_words, win_size=10, allow_pos=TOPIC_KEYWORD_POS_TAGS, check_oov=True, max_num=5):
+        pos_words = pos_words.split(' ')
         length = len(pos_words)
-        pairs = defaultdict(int)
+        import networkx as nx
+        dg = nx.DiGraph()
+        words = []
         for i, pos_word in enumerate(pos_words):
             pos_word = pos_word.split('/')
+            words.append(pos_word[0])
             if (not check_oov or pos_word[0] in self.dictionary.token2id) and (allow_pos is None or pos_word[1] in allow_pos):
                 for j in range(i+1, i+win_size):
                     if j >= length: break
-                    pw2 = pos_words[j]
+                    pw2 = pos_words[j].split('/')
                     if (not check_oov or pw2[0] in self.dictionary.token2id) and (allow_pos is None or pw2[1] in allow_pos):
-                        pairs[(pos_word[0], pw2[0])] += 1
+                        weight = dg.get_edge_data(pos_word[0], pw2[0], None)
+                        if weight is None:
+                            dg.add_edge(pos_word[0], pw2[0], w=1)
+                        else:
+                            dg.add_edge(pos_word[0], pw2[0], w=weight["w"]+1)
+        pr = nx.pagerank(dg, alpha=0.85, weight="w")
+        keyword_scores = sorted(pr.items(), key=lambda x: x[1], reverse=True)[:max_num]
+        #self.logger.info(" ".join(words))
+        #self.logger.info(keyword_scores)
+        #name = input("Continue ?")
+        return keyword_scores
 
-
-
-    def pos_word_filter(self, pos_words, allow_pos=POS_FOR_KEYWORD, in_dictionary=True):
+    def pos_word_filter(self, pos_words, allow_pos=TOPIC_KEYWORD_POS_TAGS, in_dictionary=True):
         all_words, filter_words = [], []
         pos_words = pos_words.split('\t')
         for pos_word in pos_words:

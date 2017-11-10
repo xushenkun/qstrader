@@ -28,13 +28,14 @@ spider:
           incr_max_page:  1
           page_num:       100
           enable :        True
-      title_filters:  ["上海金交所", "十只个股"]
-      out_folder:     "spider"
-      out_lock_file:  "fin_news.lock"
-      out_db_file:    "fin_news.db"
-      out_news_file:  "fin_news.txt"    
-      full_max_page:  100
-      incr_max_page:  10
+      title_filters:    ["上海金交所", "十只个股"]
+      content_filters:  ["和讯网今天刊登了"]
+      out_folder:       "spider"
+      out_lock_file:    "fin_news.lock"
+      out_db_file:      "fin_news.db"
+      out_news_file:    "fin_news.txt"    
+      full_max_page:    100
+      incr_max_page:    10
 
 corpus:
   classes:
@@ -68,17 +69,21 @@ sentiment:
       cluster:
         num_clusters_factor:   3
         d2c_file:       "fin_news.d2c"
-        d2c_fig_file:   "fin_news.png"
+        d2c_fig_file:   "fin_news.d2c.png"
         d2c_top_ratio:  0.02
+        t2c_file:       "fin_news.t2c"
+        t2c_fig_file:   "fin_news.t2c.png"
       keyword:
         num_keywords:   30
+      nmf:
+        num_words:      1000
+        num_comps:      3
       out_folder:       "sentiment"
       out_lock_file:    "fin_news.lock"
       out_id_file:      "fin_news.ids"      
       out_tpc_file:     "fin_news.tpc"   
       out_d2v_file:     "fin_news.d2v"
 
-    
 data:
   tushare:
     basic_stock_file: "basic/stock_%s.csv"

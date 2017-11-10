@@ -35,6 +35,7 @@ class FinNewsSpider(AbstractSpider):
     def config(self, conf):
         self.seeds = conf['seeds']
         self.title_filters = conf['title_filters']
+        self.content_filters = conf['content_filters']
         self.out_path = os.path.join(self.out_root_path, conf.get('out_folder'))
         self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_db_file = os.path.join(self.out_path, conf['out_db_file'])
@@ -78,7 +79,7 @@ class FinNewsSpider(AbstractSpider):
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('titleLink')
                     fni['time'] = it.get('time')
-                    fni = self._filter(fni)
+                    fni = self._filter_by_title(fni)
                     if fni: 
                         yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self.detail)
                     else:
@@ -95,13 +96,13 @@ class FinNewsSpider(AbstractSpider):
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('url')
                     fni['time'] = it.get('ptime')
-                    fni = self._filter(fni)
+                    fni = self._filter_by_title(fni)
                     if fni: 
                         yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self.detail)
                     else:
                         continue
 
-    def _filter(self, fni):
+    def _filter_by_title(self, fni):
         if fni['url'] and fni['url'].startswith("http"):
             if fni['id'] not in self.ids_seen:
                 filtered = False
@@ -112,6 +113,14 @@ class FinNewsSpider(AbstractSpider):
                     self.ids_seen.add(fni['id'])
                     return fni
         return None
+
+    def filter_by_content(self, fni):
+        filtered = False
+        for content_filter in self.content_filters:
+            if content_filter in fni['content']:
+                filtered = True
+        return filtered
+
 
     def _jsonp(self, jsonp):
         try:
@@ -144,11 +153,16 @@ class FinNewsPipeline(object):
             self.conn = sqlite3.connect(spider.out_db_file)
 
     def process_item(self, item, spider):
-        if item['title']:
-            line = "%s\t%s\t%s\t%s\t%s\t%s\n" % (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time'), item.get('content'))
-            self.file.write(line)
-            self.conn.execute('insert into finnews values(?,?,?,?,?)', (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time')))
-            return item
+        if item is None:
+            raise DropItem("Missing item")
+        elif item['title']:
+            if spider.filter_by_content(item):
+                raise DropItem("Filter item by content in %s" % item)
+            else:
+                line = "%s\t%s\t%s\t%s\t%s\t%s\n" % (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time'), item.get('content'))
+                self.file.write(line)
+                self.conn.execute('insert into finnews values(?,?,?,?,?)', (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time')))
+                return item
         else:
             raise DropItem("Missing title in %s" % item)
 
