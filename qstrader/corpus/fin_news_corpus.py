@@ -46,6 +46,7 @@ class FinNewsCorpus(AbstractCorpus):
 
     def config(self, conf):
         self.in_news_file = os.path.join(self.out_root_path, conf['in_news_file'])
+        self.days_ago = conf['days_ago']
         self.out_path = os.path.join(self.out_root_path, conf['out_folder'])
         self.out_lock_file = os.path.join(self.out_path, conf['out_lock_file'])
         self.out_id_file = os.path.join(self.out_path, conf['out_id_file'])
@@ -141,6 +142,12 @@ class FinNewsCorpus(AbstractCorpus):
         more_corpus_docs = []
         start_time = time.time()
         self.logger.info("start word segment...")
+        if self.days_ago >= 0:
+            today = datetime.datetime.now()
+            today = datetime.datetime(today.year, today.month, today.day, 0, 0, 0)
+            before = (today + datetime.timedelta(days=-1*self.days_ago)).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            before = ''
         with open(self.in_news_file, mode='r', encoding='utf-8') as fi:
             seg_file_mode = 'w' if self.full else 'a'
             pos_file_mode = 'w' if self.full else 'a'
@@ -150,13 +157,14 @@ class FinNewsCorpus(AbstractCorpus):
                     while line:
                         line = line.strip().split('\t')
                         if self.full or line[1] not in self.corpus_ids:
-                            self.corpus_ids.append(line[1])
-                            pos_words = [wp for wp in pseg.cut(line[5])]
-                            pos_content = ["%s/%s"%(wp.word, wp.flag) for wp in pos_words]
-                            content = [wp.word for wp in pos_words]
-                            more_corpus_docs.append(content)
-                            seg_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(content)))
-                            pos_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(pos_content)))
+                            if line[4] >= before:
+                                self.corpus_ids.append(line[1])
+                                pos_words = [wp for wp in pseg.cut(line[5])]
+                                pos_content = ["%s/%s"%(wp.word, wp.flag) for wp in pos_words]
+                                content = [wp.word for wp in pos_words]
+                                more_corpus_docs.append(content)
+                                seg_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(content)))
+                                pos_fo.write("%s\t%s\t%s\n" % (line[1], line[2], " ".join(pos_content)))
                         line = fi.readline()
         self.logger.info("end word segment cost %ds" % (time.time() - start_time))
         return more_corpus_docs

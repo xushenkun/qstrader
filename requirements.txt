@@ -29,3 +29,4 @@ gensim>=2.3.0
 tushare>=0.8.2
 filelock>=2.0.11
 sklearn>=0.19.1
+beautifulsoup4>=4.6.0

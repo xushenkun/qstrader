@@ -78,6 +78,7 @@ class FinNewsSentiment(AbstractSentiment):
                 corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
             with open(self.out_id_file,'w') as fo:
                 fo.write("\n".join(self.sentiment_ids))
+            self._get_topic_coherence()
             #t2c = self._get_topic_clusters(paint=True)
             d2c = self._get_doc_clusters(paint=True)
             pos_docs, d2c_idx, tfidf_idx = self._get_top_cluster_docs(d2c)
@@ -116,6 +117,18 @@ class FinNewsSentiment(AbstractSentiment):
             rank = np.searchsorted(all_ids, more_ids, sorter=sorter)
             tfidf_pos = sorter[rank]
             return more_ids, list(self.corpus.tfidf[tfidf_pos])
+
+    def _get_topic_coherence(self):
+        start_time = time.time()
+        self.logger.info("start make topic coherence...")
+        texts = [d[2].split(' ') for d in self.corpus.corpus_pos_docs]
+        texts = [[wp.split('/')[0] for wp in wps] for wps in texts]
+        coherence_scores = self.lda_model.top_topics(corpus=self.corpus.tfidf, texts=texts, dictionary=self.corpus.dictionary, coherence='c_v', topn=10)
+        coherence_scores = sorted(coherence_scores, key=lambda x: x[1], reverse=True)
+        for i, cs in enumerate(coherence_scores[:5]):
+            self.logger.info("topic %d is %s" % (i+1, cs[0]))
+        self.logger.info("topic coherence is %s" % np.mean([cs[1] for cs in coherence_scores]))
+        self.logger.info("end make topic coherence cost %ds" % (time.time() - start_time))
 
     def _get_doc_clusters(self, paint=False):
         start_time = time.time()
@@ -212,9 +225,9 @@ class FinNewsSentiment(AbstractSentiment):
         #    self.logger.info(", ".join(words))
         start_time = time.time()
         self.logger.info("start get keywords by textrank%s..." % (" using top clusters" if pos_docs is not None else "")) 
-        pos_docs = np.array(self.corpus.corpus_pos_docs) if pos_docs is None else pos_docs
+        pos_docs_content = np.array(self.corpus.corpus_pos_docs)[:, 2] if pos_docs is None else pos_docs[:, 2]
         keywords = {}
-        for pos_content in pos_docs[:, 2]:
+        for pos_content in pos_docs_content:
             keyword_scores = self.corpus.rank_keyword(pos_content)
             for word, score in keyword_scores:
                 if word in keywords:

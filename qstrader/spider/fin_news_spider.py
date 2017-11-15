@@ -10,7 +10,9 @@ import logging.config
 
 import scrapy
 from scrapy import Item, Field
+from scrapy.selector import Selector
 from scrapy.exceptions import DropItem
+from bs4 import BeautifulSoup
 import demjson
 import filelock
 
@@ -59,40 +61,60 @@ class FinNewsSpider(AbstractSpider):
                     if seed['name'] == 'hexun':
                         for p in range(max_page, 0, -1):
                             url = seed['url'] % (p, datetime.datetime.now().strftime('%Y-%m-%d'))
-                            yield scrapy.Request(url=url, meta={'seed': seed['name']}, callback=self.parse)
-                    elif seed['name'] == 'netease_finance':
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'netease':
                         page_num = seed['page_num']
                         for p in range(max_page, -1, -1):
                             url = seed['url'] % (p*page_num, page_num)
-                            yield scrapy.Request(url=url, meta={'seed': seed['name']}, callback=self.parse)
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'xueqiu':
+                        url = 'https://xueqiu.com/' #for cookie
+                        yield scrapy.Request(url=url, meta={'seed': seed, 'max_page': max_page, 'curr_page': -1}, callback=self.parse)  
+                    elif seed['name'] == 'eastmoney':
+                        urls = seed['url']
+                        for p in range(max_page, 0, -1):
+                            for url in urls:
+                                url = url % (p)
+                                yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)                      
+                    elif seed['name'] == 'sina':
+                        page_num = seed['page_num']
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (page_num, p, int(datetime.datetime.now().timestamp()*1000))
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'qq':
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (p, int(datetime.datetime.now().timestamp()*1000))
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse, headers={'Referer':'http://roll.finance.qq.com/'})
 
     def parse(self, response):
         seed = response.meta.get('seed')
-        if seed == 'hexun':
+        if seed['name'] == 'hexun':
             rsp = demjson.decode(response.body_as_unicode())
             items = rsp.get('list', None)
             if items is not None:
+                current = datetime.datetime.now()
                 for it in sorted(items, key=lambda x: x['time']):
                     fni = FinNewsItem()
-                    fni['seed'] = seed
-                    fni['id'] = it.get('id')
+                    fni['seed'] = seed['name']
+                    fni['id'] = "%s%s"%(seed['name'], it.get('id'))
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('titleLink')
-                    fni['time'] = it.get('time')
+                    year = current.year if current.month >= int(it.get('time')[:2]) else current.year-1
+                    fni['time'] = "%s-%s"%(year, it.get('time'))
                     fni = self._filter_by_title(fni)
                     if fni: 
-                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self.detail)
+                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._hexun_detail)
                     else:
                         continue
-        elif seed == 'netease_finance':
+        elif seed['name'] == 'netease':
             rsp = self._jsonp(response.body_as_unicode())
             rsp = demjson.decode(rsp)
             items = rsp.get('BA8EE5GMwangning', None)            
             if items is not None:
                 for it in sorted(items, key=lambda x: x['ptime']):                    
                     fni = FinNewsItem()
-                    fni['seed'] = seed
-                    fni['id'] = it.get('docid')
+                    fni['seed'] = seed['name']
+                    fni['id'] = "%s%s"%(seed['name'], it.get('docid'))
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('url')
                     fni['time'] = it.get('ptime')
@@ -101,6 +123,122 @@ class FinNewsSpider(AbstractSpider):
                         yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self.detail)
                     else:
                         continue
+        elif seed['name'] == 'xueqiu':
+            if response.meta.get('curr_page') == -1:
+                url = seed['url'] % (seed['page_num'], -1)
+                yield scrapy.Request(url=url, meta={'seed': seed, 'max_page': response.meta.get('max_page'), 'curr_page': 0}, callback=self.parse)
+            else:        
+                rsp = demjson.decode(response.body_as_unicode())        
+                if response.meta.get('curr_page') < response.meta.get('max_page'):
+                    if rsp.get('next_max_id', 1) > 1:
+                        url = seed['url'] % (seed['page_num'], rsp.get('next_max_id', 1))
+                        yield scrapy.Request(url=url, meta={'seed': seed, 'max_page': response.meta.get('max_page'), 'curr_page': response.meta.get('curr_page')+1}, callback=self.parse)                
+                items = rsp.get('list', None)
+                if items is not None:
+                    for it in items:
+                        fni = FinNewsItem()
+                        fni['seed'] = seed['name']                    
+                        data = demjson.decode(it.get('data'))
+                        fni['id'] = "%s%s"%(seed['name'], data.get('id'))
+                        fni['title'] = data.get('title')
+                        fni['url'] = "https://xueqiu.com%s" % data.get('target')
+                        fni['time'] = datetime.datetime.fromtimestamp(float(data.get('created_at'))/1000).strftime('%Y-%m-%d %H:%M:%S')
+                        fni = self._filter_by_title(fni)
+                        if fni: 
+                            yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self.detail)
+                        else:
+                            continue
+        elif seed['name'] == 'eastmoney':
+            current = datetime.datetime.now()
+            for text in response.css('ul#newsListContent>li>div.text'):
+                fni = FinNewsItem()
+                fni['seed'] = seed['name']
+                fni['title'] = text.css('p.title>a::text').extract_first().strip()
+                fni['url'] = text.css('p.title>a::attr(href)').extract_first().strip()
+                fni['time'] = text.css('p.time::text').extract_first().strip()
+                fni['time'] = fni['time'].replace('月','-').replace('日','')
+                year = current.year if current.month >= int(fni['time'][:2]) else current.year-1
+                fni['time'] = "%s-%s"%(year, fni['time'])
+                fni['id'] = "%s%s"%(seed['name'], fni['url'])
+                fni = self._filter_by_title(fni)
+                if fni: 
+                    yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._eastmoney_detail)
+                else:
+                    continue
+        elif seed['name'] == 'sina':
+            rsp = self._jsonp(response.body_as_unicode(), end=-7)
+            rsp = demjson.decode(rsp)
+            items = rsp.get('result', None)
+            items = items.get('data', None) if items is not None else None        
+            if items is not None:
+                for it in sorted(items, key=lambda x: x['ctime']):                    
+                    fni = FinNewsItem()
+                    fni['seed'] = seed['name']
+                    fni['id'] = "%s%s"%(seed['name'], it.get('docid'))
+                    fni['title'] = it.get('title')
+                    fni['url'] = it.get('url')
+                    fni['time'] = datetime.datetime.fromtimestamp(float(it.get('ctime'))).strftime('%Y-%m-%d %H:%M:%S')
+                    fni = self._filter_by_title(fni)
+                    if fni: 
+                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._sina_detail)
+                    else:
+                        continue
+        elif seed['name'] == 'qq':
+            current = datetime.datetime.now()
+            rsp = demjson.decode(response.body_as_unicode())
+            data = rsp.get('data', None)
+            info = data.get('article_info', None) if data is not None else None
+            lis = Selector(text=info).css('ul>li') if info is not None else None
+            if lis is not None:
+                for it in lis:    
+                    ctime = it.css('span.t-time::text').extract_first()
+                    title = it.css('a::text').extract_first()
+                    href = it.css('a::attr(href)').extract_first()
+                    fni = FinNewsItem()
+                    fni['seed'] = seed['name']
+                    fni['id'] = "%s%s"%(seed['name'], href)
+                    fni['title'] = title
+                    fni['url'] = href
+                    year = current.year if current.month >= int(ctime[:2]) else current.year-1
+                    fni['time'] = "%s-%s"%(year, ctime)
+                    fni = self._filter_by_title(fni)
+                    if fni: 
+                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._qq_detail)
+                    else:
+                        continue
+
+    def _hexun_detail(self, response):
+        return self._exact_detail("div.art_contextBox", response)
+
+    def _eastmoney_detail(self, response):
+        return self._exact_detail("div#ContentBody>p", response)
+
+    def _sina_detail(self, response):
+        return self._exact_detail("div#artibody>p", response)
+
+    def _qq_detail(self, response):
+        if self._exact_detail("div#Cnt-Main-Article-QQ div.gallery", response, use_auto=False):
+            return None
+        else:
+            return self._exact_detail("div#Cnt-Main-Article-QQ", response)
+
+    def _exact_detail(self, css_path, response, use_auto=True):
+        texts = response.css(css_path).css('::text').extract()
+        texts = [t.strip() for t in texts] if texts else ''
+        texts = ''.join(texts) if texts else ''
+        texts = texts.replace('\n','').replace('\r','').strip()
+        end = texts.rfind('责任编辑：')
+        if end != -1:
+            texts = texts[:end-1]
+        if texts:
+            item = response.meta.get('item')
+            if item is not None:
+                item['content'] = texts
+                return item
+        elif use_auto:
+            return self.detail(response)
+        else:
+            return None
 
     def _filter_by_title(self, fni):
         if fni['url'] and fni['url'].startswith("http"):
@@ -122,10 +260,10 @@ class FinNewsSpider(AbstractSpider):
         return filtered
 
 
-    def _jsonp(self, jsonp):
+    def _jsonp(self, jsonp, end=0):
         try:
             l_index = jsonp.index('(') + 1
-            r_index = jsonp.rindex(')')
+            r_index = jsonp.rindex(')', 0, end) if end != 0 else jsonp.rindex(')')
         except ValueError:
             return jsonp        
         return jsonp[l_index:r_index]

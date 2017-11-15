@@ -21,19 +21,44 @@ spider:
           name:           "hexun"
           full_max_page:  100
           incr_max_page:  10
-          enable:         True
+          page_num:       30
+          enable:         False
         - url:            "http://3g.163.com/touch/reconstruct/article/list/BA8EE5GMwangning/%d-%d.html"
-          name:           "netease_finance"          
+          name:           "netease"
           full_max_page:  3
           incr_max_page:  1
           page_num:       100
+          enable :        False
+        - url:            "https://xueqiu.com/v4/statuses/public_timeline_by_category.json?category=-1&since_id=-1&count=%d&max_id=%s"
+          name:           "xueqiu"
+          full_max_page:  100
+          incr_max_page:  10
+          page_num:       20
+          enable :        False
+        - url:            ["http://finance.eastmoney.com/news/cywjh_%s.html", "http://finance.eastmoney.com/news/cgnjj_%s.html", "http://finance.eastmoney.com/news/cgjjj_%s.html", "http://finance.eastmoney.com/news/czqyw_%s.html", "http://finance.eastmoney.com/news/cgsxw_%s.html"]
+          name:           "eastmoney"
+          full_max_page:  25
+          incr_max_page:  3
+          page_num:       20
+          enable :        False
+        - url:            "http://feed.mix.sina.com.cn/api/roll/get?pageid=155&lid=1686&num=%s&page=%s&callback=feedCardJsonpCallback&_=%s"
+          name:           "sina"
+          full_max_page:  100
+          incr_max_page:  10
+          page_num:       20
+          enable :        False
+        - url:            "http://roll.finance.qq.com/interface/roll.php?cata=&site=finance&date=&page=%s&mode=1&of=json&%s"
+          name:           "qq"
+          full_max_page:  10
+          incr_max_page:  2
+          page_num:       50
           enable :        True
       title_filters:    ["上海金交所", "十只个股"]
-      content_filters:  ["和讯网今天刊登了"]
+      content_filters:  ["和讯网今天刊登了", "郑重声明：东方财富网发布此信息目的"]
       out_folder:       "spider"
       out_lock_file:    "fin_news.lock"
       out_db_file:      "fin_news.db"
-      out_news_file:    "fin_news.txt"    
+      out_news_file:    "fin_news.txt"
       full_max_page:    100
       incr_max_page:    10
 
@@ -46,6 +71,7 @@ corpus:
         no_above:     0.5
         keep_n:       100000
       in_news_file:   "spider/fin_news.txt"
+      days_ago:       2
       out_folder:     "corpus"
       out_lock_file:  "fin_news.lock"
       out_id_file:    "fin_news.ids"
