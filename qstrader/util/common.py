@@ -29,6 +29,15 @@ def load_classes(module_name, cls):
                 classes[obj.name] = obj
     return classes    
 
+def get_filter_keyword(file_path):
+    filter_keywords = []
+    with open(file_path, mode='r', encoding='utf-8') as fi:
+        line = fi.readline()
+        while line:
+            filter_keywords.append(line.strip())
+            line = fi.readline()  
+    return filter_keywords 
+
 def get_stop_word(file_path):
     stopwords = []
     with open(file_path, mode='r', encoding='utf-8') as fi:

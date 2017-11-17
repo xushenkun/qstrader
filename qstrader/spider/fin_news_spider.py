@@ -35,7 +35,7 @@ class FinNewsSpider(AbstractSpider):
         self.an_logger = FinNewsSpider.logger
 
     def config(self, conf):
-        self.seeds = conf['seeds']
+        self.parsers = conf['parsers']
         self.title_filters = conf['title_filters']
         self.content_filters = conf['content_filters']
         self.out_path = os.path.join(self.out_root_path, conf.get('out_folder'))
@@ -54,7 +54,7 @@ class FinNewsSpider(AbstractSpider):
     def start_requests(self):
         lock = filelock.FileLock(self.out_lock_file)
         with lock.acquire(timeout=self.lock_timeout):
-            for seed in self.seeds:
+            for seed in self.parsers:
                 enable = seed.get("enable", True)
                 if enable:
                     max_page = seed['full_max_page'] if self.full else seed['incr_max_page']
@@ -85,6 +85,27 @@ class FinNewsSpider(AbstractSpider):
                         for p in range(max_page, 0, -1):
                             url = seed['url'] % (p, int(datetime.datetime.now().timestamp()*1000))
                             yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse, headers={'Referer':'http://roll.finance.qq.com/'})
+                    elif seed['name'] == 'ifeng':
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (p)
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'cnfol':
+                        page_num = seed['page_num']
+                        now = int(datetime.datetime.now().timestamp()*1000)
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (now/1000-14400, now/1000, page_num, p, now)
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'sohu':
+                        page_num = seed['page_num']
+                        now = int(datetime.datetime.now().timestamp()*1000)
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (p, page_num, now)
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
+                    elif seed['name'] == 'cnstock':
+                        page_num = seed['page_num']
+                        for p in range(max_page, 0, -1):
+                            url = seed['url'] % (p)
+                            yield scrapy.Request(url=url, meta={'seed': seed}, callback=self.parse)
 
     def parse(self, response):
         seed = response.meta.get('seed')
@@ -96,7 +117,7 @@ class FinNewsSpider(AbstractSpider):
                 for it in sorted(items, key=lambda x: x['time']):
                     fni = FinNewsItem()
                     fni['seed'] = seed['name']
-                    fni['id'] = "%s%s"%(seed['name'], it.get('id'))
+                    fni['nid'] = "%s%s"%(seed['name'], it.get('id'))
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('titleLink')
                     year = current.year if current.month >= int(it.get('time')[:2]) else current.year-1
@@ -114,7 +135,7 @@ class FinNewsSpider(AbstractSpider):
                 for it in sorted(items, key=lambda x: x['ptime']):                    
                     fni = FinNewsItem()
                     fni['seed'] = seed['name']
-                    fni['id'] = "%s%s"%(seed['name'], it.get('docid'))
+                    fni['nid'] = "%s%s"%(seed['name'], it.get('docid'))
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('url')
                     fni['time'] = it.get('ptime')
@@ -139,7 +160,7 @@ class FinNewsSpider(AbstractSpider):
                         fni = FinNewsItem()
                         fni['seed'] = seed['name']                    
                         data = demjson.decode(it.get('data'))
-                        fni['id'] = "%s%s"%(seed['name'], data.get('id'))
+                        fni['nid'] = "%s%s"%(seed['name'], data.get('id'))
                         fni['title'] = data.get('title')
                         fni['url'] = "https://xueqiu.com%s" % data.get('target')
                         fni['time'] = datetime.datetime.fromtimestamp(float(data.get('created_at'))/1000).strftime('%Y-%m-%d %H:%M:%S')
@@ -159,7 +180,7 @@ class FinNewsSpider(AbstractSpider):
                 fni['time'] = fni['time'].replace('月','-').replace('日','')
                 year = current.year if current.month >= int(fni['time'][:2]) else current.year-1
                 fni['time'] = "%s-%s"%(year, fni['time'])
-                fni['id'] = "%s%s"%(seed['name'], fni['url'])
+                fni['nid'] = "%s%s"%(seed['name'], fni['url'])
                 fni = self._filter_by_title(fni)
                 if fni: 
                     yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._eastmoney_detail)
@@ -174,7 +195,7 @@ class FinNewsSpider(AbstractSpider):
                 for it in sorted(items, key=lambda x: x['ctime']):                    
                     fni = FinNewsItem()
                     fni['seed'] = seed['name']
-                    fni['id'] = "%s%s"%(seed['name'], it.get('docid'))
+                    fni['nid'] = "%s%s"%(seed['name'], it.get('docid'))
                     fni['title'] = it.get('title')
                     fni['url'] = it.get('url')
                     fni['time'] = datetime.datetime.fromtimestamp(float(it.get('ctime'))).strftime('%Y-%m-%d %H:%M:%S')
@@ -196,7 +217,7 @@ class FinNewsSpider(AbstractSpider):
                     href = it.css('a::attr(href)').extract_first()
                     fni = FinNewsItem()
                     fni['seed'] = seed['name']
-                    fni['id'] = "%s%s"%(seed['name'], href)
+                    fni['nid'] = "%s%s"%(seed['name'], href)
                     fni['title'] = title
                     fni['url'] = href
                     year = current.year if current.month >= int(ctime[:2]) else current.year-1
@@ -206,6 +227,63 @@ class FinNewsSpider(AbstractSpider):
                         yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._qq_detail)
                     else:
                         continue
+        elif seed['name'] == 'ifeng':
+            for text in response.css('div.box_mid div.box_list_word'):
+                fni = FinNewsItem()
+                fni['seed'] = seed['name']
+                fni['title'] = text.css('h2>a::text').extract_first().strip()
+                fni['url'] = text.css('h2>a::attr(href)').extract_first().strip()
+                fni['time'] = text.css('div.keywords>a::text').extract_first().strip()
+                fni['nid'] = "%s%s"%(seed['name'], fni['url'])
+                fni = self._filter_by_title(fni)
+                if fni: 
+                    yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._ifeng_detail)
+                else:
+                    continue
+        elif seed['name'] == 'cnfol':
+            rsp = demjson.decode(response.body_as_unicode())
+            items = rsp.get('list', None)
+            if items is not None:
+                for it in items:
+                    fni = FinNewsItem()
+                    fni['seed'] = seed['name']
+                    fni['nid'] = "%s%s"%(seed['name'], it.get('ContId'))
+                    fni['title'] = it.get('Title')
+                    fni['url'] = it.get('Url')                    
+                    fni['time'] = datetime.datetime.fromtimestamp(float(it.get('CreatedTime3g'))).strftime('%Y-%m-%d %H:%M:%S')
+                    fni = self._filter_by_title(fni)
+                    if fni: 
+                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._cnfol_detail)
+                    else:
+                        continue
+        elif seed['name'] == 'sohu':
+            items = demjson.decode(response.body_as_unicode())
+            if items is not None:
+                for it in items:
+                    fni = FinNewsItem()
+                    fni['seed'] = seed['name']
+                    fni['nid'] = "%s%s"%(seed['name'], it.get('id'))
+                    fni['title'] = it.get('title')
+                    fni['url'] = "http://www.sohu.com/a/%s_%s" % (it.get('id'), it.get('authorId'))
+                    fni['time'] = datetime.datetime.fromtimestamp(float(it.get('publicTime'))/1000).strftime('%Y-%m-%d %H:%M:%S')
+                    fni = self._filter_by_title(fni)
+                    if fni: 
+                        yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._sohu_detail)
+                    else:
+                        continue
+        elif seed['name'] == 'cnstock':
+            for text in response.css('div.main-content ul.new-list>li:not(.line)'):
+                fni = FinNewsItem()
+                fni['seed'] = seed['name']
+                fni['title'] = text.css('a::text').extract_first().strip()
+                fni['url'] = text.css('a::attr(href)').extract_first().strip()
+                fni['time'] = text.css('span.time::text').extract_first().strip().replace('[','').replace(']','')
+                fni['nid'] = "%s%s"%(seed['name'], fni['url'])
+                fni = self._filter_by_title(fni)
+                if fni: 
+                    yield scrapy.Request(url=fni['url'], meta={'item': fni}, callback=self._cnstock_detail)
+                else:
+                    continue
 
     def _hexun_detail(self, response):
         return self._exact_detail("div.art_contextBox", response)
@@ -221,6 +299,18 @@ class FinNewsSpider(AbstractSpider):
             return None
         else:
             return self._exact_detail("div#Cnt-Main-Article-QQ", response)
+
+    def _ifeng_detail(self, response):
+        return self._exact_detail("div#main_content", response)
+
+    def _cnfol_detail(self, response):
+        return self._exact_detail("div#Content", response)
+
+    def _sohu_detail(self, response):
+        return self._exact_detail("article.article", response)
+
+    def _cnstock_detail(self, response):
+        return self._exact_detail("div.main-content div.content", response)
 
     def _exact_detail(self, css_path, response, use_auto=True):
         texts = response.css(css_path).css('::text').extract()
@@ -242,13 +332,13 @@ class FinNewsSpider(AbstractSpider):
 
     def _filter_by_title(self, fni):
         if fni['url'] and fni['url'].startswith("http"):
-            if fni['id'] not in self.ids_seen:
+            if fni['nid'] not in self.ids_seen:
                 filtered = False
                 for title_filter in self.title_filters:
                     if title_filter in fni['title']:
                         filtered = True
                 if not filtered:
-                    self.ids_seen.add(fni['id'])
+                    self.ids_seen.add(fni['nid'])
                     return fni
         return None
 
@@ -270,13 +360,13 @@ class FinNewsSpider(AbstractSpider):
 
 class FinNewsItem(Item):
     seed = Field()
-    id = Field()
+    nid = Field()
     title = Field()
     url = Field()
     time = Field()
     content = Field()
     def __str__(self):
-        return '%s %s %s' % (self['seed'], self['id'], self['title'])
+        return '%s %s %s' % (self['seed'], self['nid'], self['title'])
 
 class FinNewsPipeline(object):
     def open_spider(self, spider):
@@ -285,7 +375,7 @@ class FinNewsPipeline(object):
         if spider.full:
             if os.path.exists(spider.out_db_file): os.remove(spider.out_db_file)
             self.conn = sqlite3.connect(spider.out_db_file)
-            self.conn.execute("""create table finnews (seed varchar(16), nid varchar(16), title varchar(256), url varchar(256) primary key, time varchar(16))""")
+            self.conn.execute("""create table finnews (seed varchar(16), nid varchar(256), title varchar(256), url varchar(256) primary key, time varchar(16))""")
             self.conn.commit()
         else:
             self.conn = sqlite3.connect(spider.out_db_file)
@@ -297,9 +387,9 @@ class FinNewsPipeline(object):
             if spider.filter_by_content(item):
                 raise DropItem("Filter item by content in %s" % item)
             else:
-                line = "%s\t%s\t%s\t%s\t%s\t%s\n" % (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time'), item.get('content'))
+                line = "%s\t%s\t%s\t%s\t%s\t%s\n" % (item.get('seed'), item.get('nid'), item.get('title'), item.get('url'), item.get('time'), item.get('content'))
                 self.file.write(line)
-                self.conn.execute('insert into finnews values(?,?,?,?,?)', (item.get('seed'), item.get('id'), item.get('title'), item.get('url'), item.get('time')))
+                self.conn.execute('insert into finnews values(?,?,?,?,?)', (item.get('seed'), item.get('nid'), item.get('title'), item.get('url'), item.get('time')))
                 return item
         else:
             raise DropItem("Missing title in %s" % item)

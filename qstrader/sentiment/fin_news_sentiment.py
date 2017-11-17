@@ -19,6 +19,7 @@ import filelock
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 from sentiment.base import AbstractSentiment
 from corpus.fin_news_corpus import FinNewsCorpus
+from util.common import get_filter_keyword
 
 class FinNewsSentiment(AbstractSentiment):
 
@@ -27,10 +28,12 @@ class FinNewsSentiment(AbstractSentiment):
     def __init__(self, global_conf, full, conf, logger=None):
         self.out_root_path = global_conf['out_path']
         self.lock_timeout = global_conf['lock_timeout']
+        self.keyword_filter_file = global_conf['keyword_filter_file']
         self.full = full
         self.config(conf)
         self.logger = logger if logger is not None else logging.getLogger('sentiment')
         self.corpus = FinNewsCorpus(global_conf, full, global_conf['corpus']['classes'][0])
+        self.filter_keywords = get_filter_keyword(self.keyword_filter_file)
 
         self.sentiment_ids = []
         self.lda_model = None
@@ -45,7 +48,9 @@ class FinNewsSentiment(AbstractSentiment):
         self.topic_conf = conf['topic']
         self.cluster_conf = conf['cluster']
         self.keyword_conf = conf['keyword']
+        self.textrank_conf = conf['text_rank']
         self.nmf_conf = conf['nmf']
+        self.paint = conf['paint']
         self.d2c_fig_file = os.path.join(self.out_path, self.cluster_conf['d2c_fig_file'])
         self.d2c_file = os.path.join(self.out_path, self.cluster_conf['d2c_file'])
         self.t2c_fig_file = os.path.join(self.out_path, self.cluster_conf['t2c_fig_file'])
@@ -79,8 +84,8 @@ class FinNewsSentiment(AbstractSentiment):
             with open(self.out_id_file,'w') as fo:
                 fo.write("\n".join(self.sentiment_ids))
             self._get_topic_coherence()
-            #t2c = self._get_topic_clusters(paint=True)
-            d2c = self._get_doc_clusters(paint=True)
+            #t2c = self._get_topic_clusters(paint=self.paint)
+            d2c = self._get_doc_clusters(paint=self.paint)
             pos_docs, d2c_idx, tfidf_idx = self._get_top_cluster_docs(d2c)
             self._keywords_by_doc_textrank()
             self._keywords_by_doc_textrank(pos_docs)
@@ -228,7 +233,7 @@ class FinNewsSentiment(AbstractSentiment):
         pos_docs_content = np.array(self.corpus.corpus_pos_docs)[:, 2] if pos_docs is None else pos_docs[:, 2]
         keywords = {}
         for pos_content in pos_docs_content:
-            keyword_scores = self.corpus.rank_keyword(pos_content)
+            keyword_scores = self.corpus.rank_keyword(pos_content, win_size=self.textrank_conf['win_size'], max_num=self.textrank_conf['max_num'], filter_words=self.filter_keywords)
             for word, score in keyword_scores:
                 if word in keywords:
                     keywords[word] += 1
@@ -252,6 +257,8 @@ class FinNewsSentiment(AbstractSentiment):
                 else:
                     keywords[word] = score
         sorted_keywords = sorted(keywords.items(), key=lambda x: x[1], reverse=True)
+        filter_wids = [self.corpus.dictionary.token2id.get(word, -1) for word in self.filter_keywords]
+        sorted_keywords = list(filter(lambda x: x[0] not in filter_wids, sorted_keywords))
         keywords = sorted_keywords[:self.keyword_conf['num_keywords']]
         keywords = [(self.corpus.dictionary[kw[0]], kw[1]) for kw in keywords]
         self.logger.info("keywords by tfidf: %s" % keywords)
@@ -275,6 +282,7 @@ class FinNewsSentiment(AbstractSentiment):
                     keywords[word] = ((score * tpc_score), 1)
         keywords = [(it[0], it[1][0]) for it in keywords.items()]
         sorted_keywords = sorted(keywords, key=lambda x: x[1], reverse=True)
+        sorted_keywords = list(filter(lambda x: x[0] not in self.filter_keywords, sorted_keywords))
         keywords = sorted_keywords[:self.keyword_conf['num_keywords']]
         self.logger.info("keywords by topic: %s" % keywords)
         self.logger.info("end keywords by topic%s" % (" using top clusters" if d2c_idx is not None else "")) 
@@ -287,7 +295,7 @@ class FinNewsSentiment(AbstractSentiment):
             for tid, score in doc_topics:
                 topic_score[tid] += score
         topic_centroid = np.array(topic_score) / len(lda_doc_topics)      
-        self.logger.info(topic_centroid[np.argsort(topic_centroid)[-10:]])
+        #self.logger.info(topic_centroid[np.argsort(topic_centroid)[-10:]])
         return topic_centroid
 
     def _keywords_by_topic_word(self):

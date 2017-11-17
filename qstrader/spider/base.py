@@ -11,7 +11,7 @@ from scrapy.crawler         import CrawlerProcess
 from scrapy.utils.project   import get_project_settings
 from scrapy.utils.log import configure_logging
 
-from newspaper import fulltext
+from newspaper import fulltext3rd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 
@@ -23,14 +23,14 @@ class AbstractSpider(Spider):
     def config(self, conf):
         raise NotImplementedError("Should implement config(conf)")
 
-    def detail(self, response):
+    def fulltext(self, response):
         item = response.meta.get('item')
         if item is not None:
             #response.css('div.art_contextBox')
             html = response.body_as_unicode()
             if html:
                 try:
-                    text = fulltext(html, language='zh')
+                    text = fulltext3rd(html, language='zh')
                     text = text.split()
                     text = [line.strip() for line in text]
                     content = "".join([line for line in text if line])

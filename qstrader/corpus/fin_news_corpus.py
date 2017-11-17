@@ -4,6 +4,7 @@
 import os
 import sys
 import time
+import datetime
 import itertools
 import logging.config
 from collections import defaultdict
@@ -101,7 +102,7 @@ class FinNewsCorpus(AbstractCorpus):
         self.tfidf = corpora.MmCorpus(self.out_tfidf_file)
         self.logger.info("end load cost %ds" % (time.time() - start_time))
 
-    def rank_keyword(self, pos_words, win_size=10, allow_pos=TOPIC_KEYWORD_POS_TAGS, check_oov=True, max_num=5):
+    def rank_keyword(self, pos_words, win_size=10, allow_pos=TOPIC_KEYWORD_POS_TAGS, check_oov=True, max_num=5, filter_words=None):
         pos_words = pos_words.split(' ')
         length = len(pos_words)
         import networkx as nx
@@ -121,7 +122,8 @@ class FinNewsCorpus(AbstractCorpus):
                         else:
                             dg.add_edge(pos_word[0], pw2[0], w=weight["w"]+1)
         pr = nx.pagerank(dg, alpha=0.85, weight="w")
-        keyword_scores = sorted(pr.items(), key=lambda x: x[1], reverse=True)[:max_num]
+        items = sorted(pr.items(), key=lambda x: x[1], reverse=True)
+        keyword_scores = list(filter(lambda x: x[0] not in filter_words, items))[:max_num] if filter_words is not None else items[:max_num]
         #self.logger.info(" ".join(words))
         #self.logger.info(keyword_scores)
         #name = input("Continue ?")
