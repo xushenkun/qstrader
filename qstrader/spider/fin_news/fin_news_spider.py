@@ -5,16 +5,12 @@ import os
 import sys
 import json
 import sqlite3
-import datetime
 import logging.config
 from abc import ABCMeta, abstractmethod
 
 import scrapy
 from scrapy import Item, Field
-from scrapy.selector import Selector
 from scrapy.exceptions import DropItem
-from bs4 import BeautifulSoup
-import demjson
 import filelock
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
@@ -110,22 +106,20 @@ class FinNewsSpider(AbstractSpider):
             nids = cursor.fetchall()
             for nid in nids:
                 self.ids_seen.add(nid[0])
-            conn.close()        
+            conn.close()
 
     def start_requests(self):
+        self.parsers = []
         lock = filelock.FileLock(self.out_lock_file)
         with lock.acquire(timeout=self.lock_timeout):
             for parser_conf in self.parser_confs:
                 enable = parser_conf.get("enable", True)
-                if enable:
-                    
-
-
-    def _parse_list(self, response):
-        raise NotImplementedError("Should implement _parse_list(response)")
-
-    def _parse_detail(self, response):
-        raise NotImplementedError("Should implement _parse_detail(response)")
+                name = parser_conf.get('name', None)
+                if enable and self.parser_classes.get(name) is not None:
+                    parser = self.parser_classes[name](self, parser_conf)
+                    self.parsers.append(parser)
+                    for req in parser.start_requests():
+                        yield req
 
     def _exact_detail(self, css_path, response, use_auto=True):
         texts = response.css(css_path).css('::text').extract()
@@ -169,5 +163,5 @@ class FinNewsSpider(AbstractSpider):
             l_index = jsonp.index('(') + 1
             r_index = jsonp.rindex(')', 0, end) if end != 0 else jsonp.rindex(')')
         except ValueError:
-            return jsonp        
+            return jsonp
         return jsonp[l_index:r_index]

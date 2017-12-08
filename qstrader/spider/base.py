@@ -11,7 +11,7 @@ from scrapy.crawler         import CrawlerProcess
 from scrapy.utils.project   import get_project_settings
 from scrapy.utils.log import configure_logging
 
-from newspaper import fulltext3rd
+from newspaper import fulltext as fulltext3rd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 

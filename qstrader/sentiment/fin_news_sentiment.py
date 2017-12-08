@@ -13,6 +13,7 @@ import scipy.cluster.hierarchy as sch
 from sklearn.manifold import TSNE
 from sklearn.decomposition import NMF
 from sklearn.preprocessing import normalize
+from sklearn.feature_extraction.text import CountVectorizer
 from gensim import corpora, models, matutils
 import filelock
 
@@ -20,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..')
 from sentiment.base import AbstractSentiment
 from corpus.fin_news_corpus import FinNewsCorpus
 from util.common import get_filter_keyword
+from data.tushare_data import TushareData
 
 class FinNewsSentiment(AbstractSentiment):
 
@@ -32,7 +34,8 @@ class FinNewsSentiment(AbstractSentiment):
         self.full = full
         self.config(conf)
         self.logger = logger if logger is not None else logging.getLogger('sentiment')
-        self.corpus = FinNewsCorpus(global_conf, full, global_conf['corpus']['classes'][0])
+        self.tushare = TushareData(global_conf, self.full, global_conf['data']['tushare'])
+        self.corpus = FinNewsCorpus(global_conf, self.full, global_conf['corpus']['classes'][0])
         self.filter_keywords = get_filter_keyword(self.keyword_filter_file)
 
         self.sentiment_ids = []
@@ -74,6 +77,7 @@ class FinNewsSentiment(AbstractSentiment):
                         more_d2v = self.lda_model[more_tfidf]
                         self.lda_d2v = list(itertools.chain(self.lda_d2v, more_d2v))
                         corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
+                        self.lda_d2v = np.array(corpora.MmCorpus(self.out_d2v_file))
             else:
                 self.sentiment_ids = self.corpus.corpus_ids
                 self.lda_model = models.LdaMulticore(self.corpus.tfidf, id2word=self.corpus.dictionary, 
@@ -81,18 +85,32 @@ class FinNewsSentiment(AbstractSentiment):
                 self.lda_model.save(self.out_tpc_file)
                 self.lda_d2v = self.lda_model[self.corpus.tfidf]
                 corpora.MmCorpus.serialize(self.out_d2v_file, self.lda_d2v)
+                self.lda_d2v = np.array(corpora.MmCorpus(self.out_d2v_file))
+            self.logger.info("doc total number is [%s]" % len(self.lda_d2v))
             with open(self.out_id_file,'w') as fo:
                 fo.write("\n".join(self.sentiment_ids))
             self._get_topic_coherence()
             #t2c = self._get_topic_clusters(paint=self.paint)
             d2c = self._get_doc_clusters(paint=self.paint)
             pos_docs, d2c_idx, tfidf_idx = self._get_top_cluster_docs(d2c)
-            self._keywords_by_doc_textrank()
-            self._keywords_by_doc_textrank(pos_docs)
-            self._keywords_by_doc_tfidf()
-            self._keywords_by_doc_tfidf(tfidf_idx)
-            self._keywords_by_doc_topic()
-            self._keywords_by_doc_topic(d2c_idx)
+            keywords = self._keywords_by_doc_textrank()
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
+            keywords = self._keywords_by_doc_textrank(pos_docs)
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
+            keywords = self._keywords_by_doc_tfidf()
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
+            keywords = self._keywords_by_doc_tfidf(tfidf_idx)
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
+            keywords = self._keywords_by_doc_topic()
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
+            keywords = self._keywords_by_doc_topic(d2c_idx)
+            patterns = self._get_topic_pattern(keywords)
+            stocks = self._get_neighbor_stock(patterns)
 
             self.logger.info("end train model cost %ds" % (time.time() - start_time))
 
@@ -300,6 +318,60 @@ class FinNewsSentiment(AbstractSentiment):
 
     def _keywords_by_topic_word(self):
         pass
+
+    def _get_topic_pattern(self, keywords):
+        texts = [d[2].split(' ') for d in self.corpus.corpus_pos_docs]
+        texts = [" ".join([wp.split('/')[0] for wp in wps]) for wps in texts]
+        vocabs = []
+        for kw in keywords:
+            vocabs.append("%s 主题"%kw[0])
+            vocabs.append("%s 概念"%kw[0])
+            vocabs.append("%s 概念股"%kw[0])
+            vocabs.append("%s 题材"%kw[0])
+            vocabs.append("%s 板块"%kw[0])
+        vectorizer = CountVectorizer(min_df=1, ngram_range=(2,2), vocabulary=vocabs)
+        bigram_tf = vectorizer.fit_transform(texts)
+        bigram_voc = vectorizer.get_feature_names()
+        bigram_count = []
+        for i in range(bigram_tf.shape[1]):
+            bigram_count.append(bigram_tf[:, i].sum())
+        bigram_tc = zip(bigram_voc, bigram_count)
+        bigram_tc = list(filter(lambda x: x[1]>0, bigram_tc))
+        self.logger.info("bigram term count is %s" % bigram_tc)
+        return bigram_tc
+
+    def _get_neighbor_stock(self, bigrams):
+        texts = [d[2].split(' ') for d in self.corpus.corpus_pos_docs]
+        texts = [" ".join([wp.split('/')[0] for wp in wps]) for wps in texts]
+        stock_tc = {}
+        for bg in bigrams:
+            tpc = bg[0]
+            for doc in texts:
+                idx1 = doc.find(tpc)
+                while idx1 != -1:
+                    idx2 = idx1+len(tpc)
+                    stop1 = doc.rfind("。", 0, idx1)
+                    substr = doc[stop1+1:idx1] if stop1 != -1 else ""
+                    words = substr.split(' ')
+                    sns = [word for word in words if self.tushare.is_stock_name(word)]
+                    stop2 = doc.rfind("。", 0, stop1) if stop1 != -1 else -1
+                    substr = doc[stop2+1:stop1] if stop2 != -1 else ""
+                    words = substr.split(' ')
+                    sns.extend([word for word in words if self.tushare.is_stock_name(word)])
+                    stop1 = doc.find("。", idx2)
+                    substr = doc[idx2:stop1] if stop1 != -1 else ""
+                    words = substr.split(' ')
+                    sns.extend([word for word in words if self.tushare.is_stock_name(word)])
+                    stop2 = doc.find("。", stop1+1) if stop1 != -1 else -1
+                    substr = doc[stop1+1:stop2] if stop2 != -1 else ""
+                    words = substr.split(' ')
+                    sns.extend([word for word in words if self.tushare.is_stock_name(word)])                    
+                    for sn in sns:
+                        stock_tc[sn] = stock_tc.get(sn, 0) + 1
+                    doc = doc[stop2 if stop2 != -1 else stop1 if stop1 != -1 else idx2:]
+                    idx1 = doc.find(tpc)
+        self.logger.info(stock_tc)
+        return stock_tc
 
     def _paint(self, d2v, d2c, link_matrix, is_3d=False, is_topic=False):
         start_time = time.time()

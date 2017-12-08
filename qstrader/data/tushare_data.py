@@ -21,21 +21,29 @@ class TushareData(object):
         self.config(conf)
         self.logger = logger if logger is not None else logging.getLogger('tushare')
         self._stock_codes = None
+        self._stock_names = None
+        self.init_stock()
 
     def config(self, conf):
         now = datetime.datetime.now()
         today = now.strftime("%Y-%m-%d")
-        self.basic_stock_file = os.path.join(self.data_root_path, conf['basic_stock_file']) % today
+        self.basic_stock_file = os.path.join(self.data_root_path, conf['basic_stock_file']) % today        
 
-    def get_stock_codes(self, refresh=False):
-        if self._stock_codes is None or refresh:
+    def init_stock(self):
+        if self._stock_codes is None:
             if not os.path.exists(self.basic_stock_file):
                 stocks = ts.get_stock_basics()
                 stocks.to_csv(self.basic_stock_file, encoding='utf-8')
             else:
                 stocks = pd.read_csv(self.basic_stock_file, encoding='utf-8')
             self._stock_codes = stocks.values[:, 0].tolist()
-        return self._stock_codes
+            self._stock_names = stocks.values[:, 1].tolist()
+
+    def get_stock_names(self):
+        return self._stock_names
 
     def is_stock_code(self, s):
-        return s in self.get_stock_codes()
+        return s in self._stock_codes
+
+    def is_stock_name(self, s):
+        return s in self._stock_names

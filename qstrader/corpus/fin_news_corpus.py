@@ -37,9 +37,11 @@ class FinNewsCorpus(AbstractCorpus):
         self.logger = logger if logger is not None else logging.getLogger('corpus')
         self.tushare = TushareData(global_conf, self.full, global_conf['data']['tushare'])
         self.stopwords = get_stop_word(self.stopword_file)
+        for word in self.tushare.get_stock_names():
+            jieba.add_word(word, freq=11111111)
 
-        self.corpus_ids = []   
-        self.corpus_docs = []    
+        self.corpus_ids = [] 
+        self.corpus_docs = []
         self.corpus_pos_docs = []
         self.dictionary = None     
         self.docbow = []
