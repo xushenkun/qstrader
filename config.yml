@@ -84,7 +84,24 @@ spider:
       out_folder:       "spider"
       out_lock_file:    "fin_news.lock"
       out_db_file:      "fin_news.db"
-      out_news_file:    "fin_news.txt"
+      out_raw_file:     "fin_news.txt"
+      full_max_page:    100
+      incr_max_page:    10
+    - id:   1
+      name: "Finance Bulletin Spider"
+      parsers:
+        - url:            {"crisk":"http://data.eastmoney.com/notices/getdata.ashx?StockCode=&FirstNodeType=3&CodeType=1&PageIndex=1&PageSize=50&jsObj=nNRAYJPP&SecNodeType=0&Time=&rt=50513458", "http://finance.eastmoney.com/news/cgnjj_%s.html", "http://finance.eastmoney.com/news/cgjjj_%s.html", "http://finance.eastmoney.com/news/czqyw_%s.html", "http://finance.eastmoney.com/news/cgsxw_%s.html"}
+          name:           "eastmoney"
+          full_max_page:  25
+          incr_max_page:  3
+          page_num:       20
+          enable :        True
+      title_filters:    []
+      content_filters:  []
+      out_folder:       "spider"
+      out_lock_file:    "fin_bulletin.lock"
+      out_db_file:      "fin_bulletin.db"
+      out_raw_file:     "fin_bulletin.txt"
       full_max_page:    100
       incr_max_page:    10
 

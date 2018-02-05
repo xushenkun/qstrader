@@ -18,17 +18,17 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + '..' 
 from spider.base import AbstractSpider
 from util.common import load_classes
 
-class FinNewsItem(Item):
+class FinBulletinItem(Item):
     seed = Field()
-    nid = Field()
+    bid = Field()
     title = Field()
     url = Field()
     time = Field()
     content = Field()
     def __str__(self):
-        return '%s %s %s' % (self['seed'], self['nid'], self['title'])
+        return '%s %s %s' % (self['seed'], self['bid'], self['title'])
 
-class FinNewsParser(object):
+class FinBulletinParser(object):
 
     __metaclass__ = ABCMeta
 
@@ -44,7 +44,7 @@ class FinNewsParser(object):
     def _parse_detail(self, response):
         raise NotImplementedError("Should implement _parse_detail(response)")
 
-class FinNewsPipeline(object):
+class FinBulletinPipeline(object):
     def open_spider(self, spider):
         mode = 'w+' if spider.full else 'a+'
         self.file = open(spider.out_raw_file, mode=mode, encoding='utf-8')
